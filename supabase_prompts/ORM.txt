@@ -1,0 +1,47 @@
+1. Install ORM
+Add the ORM to your project.
+Code:
+File: Code
+```
+npm install prisma --save-dev
+```
+
+File: Code
+```
+npx prisma init
+```
+
+2. Configure ORM
+Set up your ORM configuration.
+Code:
+File: .env.local
+```
+# Connect to Supabase via connection pooling
+DATABASE_URL="postgresql://postgres.vzsqbdrwevtmwlbtjnnv:[YOUR-PASSWORD]@aws-1-eu-west-1.pooler.supabase.com:6543/postgres?pgbouncer=true"
+
+# Direct connection to the database. Used for migrations
+DIRECT_URL="postgresql://postgres.vzsqbdrwevtmwlbtjnnv:[YOUR-PASSWORD]@aws-1-eu-west-1.pooler.supabase.com:5432/postgres"
+```
+
+File: prisma/schema.prisma
+```
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+```
+
+3. Install Agent Skills (Optional)
+Agent Skills give AI coding tools ready-made instructions, scripts, and resources for working with Supabase more accurately and efficiently.
+Details:
+npx skills add supabase/agent-skills
+Code:
+File: Code
+```
+npx skills add supabase/agent-skills
+```
