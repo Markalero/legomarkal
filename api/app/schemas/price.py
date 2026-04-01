@@ -18,9 +18,11 @@ class MarketPriceOut(BaseModel):
     product_id: UUID
     source: SourceType
     price_new: Optional[Decimal]
+    min_price_new: Optional[Decimal]
+    max_price_new: Optional[Decimal]
     price_used: Optional[Decimal]
-    min_price: Optional[Decimal]
-    max_price: Optional[Decimal]
+    min_price_used: Optional[Decimal]
+    max_price_used: Optional[Decimal]
     currency: str
     fetched_at: datetime
 
@@ -97,9 +99,11 @@ class SetCodePriceOut(BaseModel):
     set_number: str
     source: SourceType
     price_new: Optional[Decimal]
+    min_price_new: Optional[Decimal]
+    max_price_new: Optional[Decimal]
     price_used: Optional[Decimal]
-    min_price: Optional[Decimal]
-    max_price: Optional[Decimal]
+    min_price_used: Optional[Decimal]
+    max_price_used: Optional[Decimal]
     currency: str
     fetched_at: datetime
 

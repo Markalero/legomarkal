@@ -16,6 +16,23 @@ import {
 } from "@/lib/utils";
 import type { Product, ProductListOut } from "@/types";
 
+function getRangeByCondition(product: Product): { min: number | null; max: number | null } {
+  const latest = product.latest_market_price;
+  if (!latest) return { min: null, max: null };
+
+  if (product.condition === "SEALED") {
+    return {
+      min: latest.min_price_new,
+      max: latest.max_price_new,
+    };
+  }
+
+  return {
+    min: latest.min_price_used,
+    max: latest.max_price_used,
+  };
+}
+
 interface InventoryTableProps {
   data: ProductListOut;
   onPageChange: (page: number) => void;
@@ -102,6 +119,7 @@ export function InventoryTable({ data, onPageChange, onToggleAvailability }: Inv
                   product.latest_market_price?.price_used ??
                   null;
                 const isSold = product.availability === "sold";
+                const range = getRangeByCondition(product);
 
                 // Precio y margen ajustados según estado de venta
                 const displayPrice = isSold ? product.sold_price : marketPrice;
@@ -145,12 +163,19 @@ export function InventoryTable({ data, onPageChange, onToggleAvailability }: Inv
                     </td>
                     {/* Columna de precio: muestra sold_price con badge "venta" si está vendido */}
                     <td className="px-4 py-3 text-right text-text-primary">
-                      <span className="inline-flex items-center justify-end gap-1.5">
-                        {formatCurrency(displayPrice)}
-                        {isSold && (
-                          <Badge variant="neutral">venta</Badge>
+                      <div className="flex flex-col items-end gap-0.5">
+                        <span className="inline-flex items-center justify-end gap-1.5">
+                          {formatCurrency(displayPrice)}
+                          {isSold && (
+                            <Badge variant="neutral">venta</Badge>
+                          )}
+                        </span>
+                        {!isSold && (range.min !== null || range.max !== null) && (
+                          <span className="text-xs text-text-muted">
+                            min {formatCurrency(range.min)} / max {formatCurrency(range.max)}
+                          </span>
                         )}
-                      </span>
+                      </div>
                     </td>
                     <td className="px-4 py-3 text-right">
                       {marginBadge(marginPct)}

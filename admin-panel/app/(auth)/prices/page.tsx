@@ -229,7 +229,13 @@ export default function PricesPage() {
                       tickLine={false}
                     />
                     <Tooltip
-                      formatter={(value: number) => formatCurrency(value)}
+                      contentStyle={{
+                        backgroundColor: "#141416",
+                        border: "1px solid #2A2A2D",
+                        borderRadius: 8,
+                      }}
+                      labelStyle={{ color: "#A1A1AA", fontSize: 12 }}
+                      formatter={(value: number, name: string) => [formatCurrency(value), name]}
                       labelFormatter={(label) => formatDate(label)}
                     />
                     <Legend />
@@ -239,7 +245,7 @@ export default function PricesPage() {
                         <Line
                           type="monotone"
                           dataKey="price_new"
-                          name="New"
+                          name="Nuevo"
                           stroke="#F59E0B"
                           strokeWidth={highlightNew ? 3 : 1.5}
                           strokeDasharray={highlightNew ? "0" : "4 4"}
@@ -248,7 +254,7 @@ export default function PricesPage() {
                         <Line
                           type="monotone"
                           dataKey="price_used"
-                          name="Used"
+                          name="Usado"
                           stroke="#3B82F6"
                           strokeWidth={highlightNew ? 1.5 : 3}
                           strokeDasharray={highlightNew ? "4 4" : "0"}
@@ -267,6 +273,7 @@ export default function PricesPage() {
             </Card>
 
             <Card padded={false}>
+            <div className="overflow-hidden rounded-xl">
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-border bg-bg-elevated text-left text-xs text-text-muted uppercase tracking-wider">
@@ -275,6 +282,8 @@ export default function PricesPage() {
                   <th className="px-4 py-3">Estado</th>
                   <th className="px-4 py-3 text-right">Compra</th>
                   <th className="px-4 py-3 text-right">Actual</th>
+                  <th className="px-4 py-3 text-right text-text-muted/80">Mín.</th>
+                  <th className="px-4 py-3 text-right text-text-muted/80">Máx.</th>
                   <th className="px-4 py-3 text-right">Beneficio</th>
                 </tr>
               </thead>
@@ -283,12 +292,8 @@ export default function PricesPage() {
                   <tr
                     key={p.id}
                     className={`cursor-pointer transition-colors hover:bg-bg-elevated/60 ${
-                      selectedProductId === p.id ? "bg-bg-elevated/40" : ""
-                    } ${
-                      (p.profit_eur ?? 0) > 0
-                        ? "border-l-2 border-l-status-success/40"
-                        : (p.profit_eur ?? 0) < 0
-                        ? "border-l-2 border-l-status-error/40"
+                      selectedProductId === p.id
+                        ? "bg-bg-elevated/40 shadow-[inset_3px_0_0_0_rgba(16,185,129,0.45)]"
                         : ""
                     }`}
                     onClick={() => handleSelectProduct(p)}
@@ -320,17 +325,23 @@ export default function PricesPage() {
                     <td className="px-4 py-3 text-right">
                       {formatCurrency(p.current_market_price)}
                     </td>
+                    <td className="px-4 py-3 text-right text-xs text-text-muted">
+                      {formatCurrency(p.min_market_price)}
+                    </td>
+                    <td className="px-4 py-3 text-right text-xs text-text-muted">
+                      {formatCurrency(p.max_market_price)}
+                    </td>
                     <td className="px-4 py-3">
-                      <div className="flex items-center gap-2 justify-end">
+                      <div className="ml-auto flex h-6 items-center justify-end gap-3">
                         {p.profit_eur !== null && (
-                          <div className="w-16 h-1.5 rounded-full overflow-hidden bg-bg-elevated">
+                          <div className="w-20 h-1.5 rounded-full overflow-hidden bg-bg-elevated">
                             <div
                               className={`h-full rounded-full ${(p.profit_eur ?? 0) >= 0 ? "bg-status-success" : "bg-status-error"}`}
                               style={{ width: `${Math.min(100, Math.abs((p.profit_eur ?? 0) / (maxProfit || 1)) * 100)}%` }}
                             />
                           </div>
                         )}
-                        <span className={`font-medium tabular-nums ${(p.profit_eur ?? 0) >= 0 ? "text-status-success" : "text-status-error"}`}>
+                        <span className={`w-20 text-right font-medium tabular-nums leading-none ${(p.profit_eur ?? 0) >= 0 ? "text-status-success" : "text-status-error"}`}>
                           {formatCurrency(p.profit_eur)}
                         </span>
                       </div>
@@ -339,13 +350,14 @@ export default function PricesPage() {
                 ))}
                 {insights.length === 0 && (
                   <tr>
-                    <td colSpan={6} className="px-4 py-12 text-center text-text-muted">
+                    <td colSpan={8} className="px-4 py-12 text-center text-text-muted">
                       Sin productos en inventario.
                     </td>
                   </tr>
                 )}
               </tbody>
             </table>
+            </div>
           </Card>
           </div>
         )}

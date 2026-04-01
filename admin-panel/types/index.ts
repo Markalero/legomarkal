@@ -95,9 +95,11 @@ export interface MarketPrice {
   product_id: string;
   source: PriceSource;
   price_new: number | null;
+  min_price_new: number | null;
+  max_price_new: number | null;
   price_used: number | null;
-  min_price: number | null;
-  max_price: number | null;
+  min_price_used: number | null;
+  max_price_used: number | null;
   currency: string;
   fetched_at: string;
 }

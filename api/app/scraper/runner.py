@@ -31,8 +31,10 @@ async def _run_scrapers_for_product(db, product: Product) -> None:
                     data={
                         "price_new": data.price_new,
                         "price_used": data.price_used,
-                        "min_price": data.min_price,
-                        "max_price": data.max_price,
+                        "min_price_new": data.min_price_new,
+                        "max_price_new": data.max_price_new,
+                        "min_price_used": data.min_price_used,
+                        "max_price_used": data.max_price_used,
                         "currency": data.currency,
                     },
                 )

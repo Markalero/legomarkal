@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(ls -la /c/Users/Ander/Desktop/juegos/yop/LegoMarkal/.env*)",
+      "Bash(ls -la /c/Users/Ander/Desktop/juegos/yop/LegoMarkal/*.env)",
+      "Bash(/c/Users/Ander/Desktop/juegos/yop/LegoMarkal/.venv/Scripts/python.exe -c \":*)",
+      "Bash(cat /c/Users/Ander/Desktop/juegos/yop/LegoMarkal/api/scripts/*.py)"
+    ]
+  }
+}

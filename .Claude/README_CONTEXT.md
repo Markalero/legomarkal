@@ -1,6 +1,6 @@
 # README_CONTEXT
 
-Fecha de actualización: 2026-04-01 (SellModal integrado en InventoryTable, sold_price en columna de precio, dim en filas vendidas, spinner de navegación eliminado)
+Fecha de actualización: 2026-04-01 (fix validación BrickLink en alta rápida + parser monetario BrickLink con dataset EUR/USD en EUR, ignorando RON/ROL)
 
 ---
 
@@ -22,6 +22,12 @@ Fecha de actualización: 2026-04-01 (SellModal integrado en InventoryTable, sold
 - Dashboard actualizado con comparativa temporal de dinero invertido vs valor de mercado (incluye beneficio potencial).
 - Módulo de precios ampliado con gráfica temporal detallada (mínimo/media/máximo diario) y ranking de sets por beneficio en euros.
 - API de productos ampliada con alta rápida: `POST /products/quick-add` (set_number + datos mínimos), autocompletando nombre/tema/año/imagen principal desde BrickLink.
+- Parser de metadatos BrickLink endurecido: fallback de nombre desde `h1`/`title` cuando falta `og:title`, evitando falsos negativos al validar sets reales como `7965`.
+- Parser de precios BrickLink ajustado para priorizar importes `EUR` cuando la celda incluye múltiples monedas y persistencia final normalizada siempre a `EUR` en `market_prices`.
+- Parser de precios BrickLink endurecido para Price Guide por moneda (`cID=N`): usa dataset EUR+USD convertido a EUR, ignora RON/ROL y soporta tokens con espacios no separables (`US\u00A0$`).
+- Extracción de precio BrickLink prioriza `catalogPG.asp` (Price Guide por moneda) y deja la ficha de catálogo como fallback secundario para evitar sesgos por moneda de sesión en la página principal.
+- `market_prices` ampliada con rangos por estado y nomenclatura explícita: `min_price_new/max_price_new` (nuevo) y `min_price_used/max_price_used` (usado), para no mezclar métricas de condiciones distintas.
+- Limpieza operativa aplicada tras migración de rangos: vaciado de `market_prices` y `portfolio_daily_snapshots` para regenerar histórico consistente con el nuevo esquema.
 - API de precios ampliada con histórico por producto: `GET /market-prices/{product_id}/trend?months=6&guide_type=sold`.
 - Historial de precios con backfill mensual automático cuando faltan meses desde la fecha de compra.
 - Cálculo de valor de mercado ajustado por estado: `SEALED => price_new`, `OPEN_COMPLETE/OPEN_INCOMPLETE => price_used`.

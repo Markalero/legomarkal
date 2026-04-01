@@ -143,8 +143,10 @@ class PriceService:
                         source="bricklink",
                         price_new=carry_value.quantize(Decimal("0.01")),
                         price_used=carry_value.quantize(Decimal("0.01")),
-                        min_price=carry_value.quantize(Decimal("0.01")),
-                        max_price=carry_value.quantize(Decimal("0.01")),
+                        min_price_new=carry_value.quantize(Decimal("0.01")),
+                        max_price_new=carry_value.quantize(Decimal("0.01")),
+                        min_price_used=carry_value.quantize(Decimal("0.01")),
+                        max_price_used=carry_value.quantize(Decimal("0.01")),
                         currency="EUR",
                         fetched_at=datetime(
                             current_month.year,
@@ -189,8 +191,10 @@ class PriceService:
             price.source = source
             price.price_new = normalized_data.get("price_new")
             price.price_used = normalized_data.get("price_used")
-            price.min_price = normalized_data.get("min_price")
-            price.max_price = normalized_data.get("max_price")
+            price.min_price_new = normalized_data.get("min_price_new")
+            price.max_price_new = normalized_data.get("max_price_new")
+            price.min_price_used = normalized_data.get("min_price_used")
+            price.max_price_used = normalized_data.get("max_price_used")
             price.currency = "EUR"
             price.fetched_at = now_utc
 
@@ -202,8 +206,10 @@ class PriceService:
                 source=source,
                 price_new=normalized_data.get("price_new"),
                 price_used=normalized_data.get("price_used"),
-                min_price=normalized_data.get("min_price"),
-                max_price=normalized_data.get("max_price"),
+                min_price_new=normalized_data.get("min_price_new"),
+                max_price_new=normalized_data.get("max_price_new"),
+                min_price_used=normalized_data.get("min_price_used"),
+                max_price_used=normalized_data.get("max_price_used"),
                 currency="EUR",
                 fetched_at=now_utc,
             )
@@ -243,10 +249,12 @@ class PriceService:
                 "set_number": set_number,
                 "source": data.source,
                 "price_new": data.price_new,
+                "min_price_new": data.min_price_new,
+                "max_price_new": data.max_price_new,
                 "price_used": data.price_used,
-                "min_price": data.min_price,
-                "max_price": data.max_price,
-                "currency": data.currency,
+                "min_price_used": data.min_price_used,
+                "max_price_used": data.max_price_used,
+                "currency": "EUR",
                 "fetched_at": datetime.now(timezone.utc),
             }
         finally:
@@ -578,8 +586,28 @@ class DashboardService:
                 for price in history
                 if self._select_market_price(product.condition, price.price_new, price.price_used) is not None
             ]
-            min_candidates = [Decimal(str(price.min_price)) for price in history if price.min_price is not None]
-            max_candidates = [Decimal(str(price.max_price)) for price in history if price.max_price is not None]
+            if product.condition == "SEALED":
+                min_candidates = [
+                    Decimal(str(price.min_price_new))
+                    for price in history
+                    if price.min_price_new is not None
+                ]
+                max_candidates = [
+                    Decimal(str(price.max_price_new))
+                    for price in history
+                    if price.max_price_new is not None
+                ]
+            else:
+                min_candidates = [
+                    Decimal(str(price.min_price_used))
+                    for price in history
+                    if price.min_price_used is not None
+                ]
+                max_candidates = [
+                    Decimal(str(price.max_price_used))
+                    for price in history
+                    if price.max_price_used is not None
+                ]
             current = values[-1] if values else None
             min_value = min(min_candidates) if min_candidates else (min(values) if values else None)
             max_value = max(max_candidates) if max_candidates else (max(values) if values else None)
