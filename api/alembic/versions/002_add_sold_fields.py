@@ -1,3 +1,4 @@
+# Migración 002 — añade sold_date/sold_price, elimina condition_notes, soft-delete de condición USED
 """add sold fields, drop condition_notes, remove USED condition
 
 Revision ID: 002
