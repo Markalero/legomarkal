@@ -1,0 +1,228 @@
+// Tabla densa de inventario con paginación server-side y navegación a ficha
+"use client";
+import Link from "next/link";
+import Image from "next/image";
+import { useRouter } from "next/navigation";
+import { useState } from "react";
+import { ChevronLeft, ChevronRight, ExternalLink } from "lucide-react";
+import { Badge } from "@/components/ui/Badge";
+import { Button } from "@/components/ui/Button";
+import { SellModal } from "@/components/ui/SellModal";
+import {
+  formatCurrency,
+  formatPct,
+  conditionLabel,
+  calcMarginPct,
+} from "@/lib/utils";
+import type { Product, ProductListOut } from "@/types";
+
+interface InventoryTableProps {
+  data: ProductListOut;
+  onPageChange: (page: number) => void;
+  onToggleAvailability?: (
+    productId: string,
+    currentAvailability: "available" | "sold",
+    soldPrice?: number,
+    soldDate?: string,
+  ) => void;
+}
+
+/** Estado del modal de venta: qué producto está siendo marcado como vendido */
+interface SellTarget {
+  productId: string;
+  productName: string;
+  suggestedPrice: number | null;
+}
+
+function marginBadge(pct: number | null) {
+  if (pct === null) return <span className="text-text-muted">—</span>;
+  const variant = pct >= 20 ? "success" : pct >= 0 ? "warning" : "error";
+  return <Badge variant={variant}>{formatPct(pct)}</Badge>;
+}
+
+export function InventoryTable({ data, onPageChange, onToggleAvailability }: InventoryTableProps) {
+  const router = useRouter();
+  const { items, total, page, size, pages } = data;
+  const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+
+  // Producto objetivo para el modal de venta; null = modal cerrado
+  const [sellTarget, setSellTarget] = useState<SellTarget | null>(null);
+
+  function resolveImageUrl(url: string) {
+    if (url.startsWith("http://") || url.startsWith("https://")) return url;
+    return new URL(url, apiUrl).toString();
+  }
+
+  return (
+    <>
+      {/* Modal de venta — fuera del <table> para evitar nesting inválido en el DOM */}
+      <SellModal
+        open={sellTarget !== null}
+        productName={sellTarget?.productName ?? ""}
+        suggestedPrice={sellTarget?.suggestedPrice ?? null}
+        onConfirm={(soldPrice, soldDate) => {
+          onToggleAvailability?.(sellTarget!.productId, "available", soldPrice, soldDate);
+          setSellTarget(null);
+        }}
+        onCancel={() => setSellTarget(null)}
+      />
+
+      <div className="flex flex-col">
+        {/* Tabla */}
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-border bg-bg-elevated text-left text-xs text-text-muted uppercase tracking-wider">
+                <th className="px-4 py-3">Set ID</th>
+                <th className="px-4 py-3">Imagen</th>
+                <th className="px-4 py-3">Nombre</th>
+                <th className="px-4 py-3">Tema</th>
+                <th className="px-4 py-3">Condición</th>
+                <th className="px-4 py-3 text-right">Compra</th>
+                <th className="px-4 py-3 text-right">Mercado</th>
+                <th className="px-4 py-3 text-right">Margen</th>
+                <th className="px-4 py-3">Disponibilidad</th>
+                <th className="px-4 py-3 w-10" />
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-border">
+              {items.length === 0 && (
+                <tr>
+                  <td
+                    colSpan={10}
+                    className="px-4 py-12 text-center text-text-muted"
+                  >
+                    Sin productos que coincidan con los filtros.
+                  </td>
+                </tr>
+              )}
+              {items.map((product: Product) => {
+                const marketPrice =
+                  product.latest_market_price?.price_new ??
+                  product.latest_market_price?.price_used ??
+                  null;
+                const isSold = product.availability === "sold";
+
+                // Precio y margen ajustados según estado de venta
+                const displayPrice = isSold ? product.sold_price : marketPrice;
+                const marginPct = isSold
+                  ? calcMarginPct(product.purchase_price, product.sold_price)
+                  : calcMarginPct(product.purchase_price, marketPrice);
+
+                return (
+                  <tr
+                    key={product.id}
+                    className={`cursor-pointer transition-colors hover:bg-bg-elevated/50 ${
+                      isSold ? "opacity-60" : ""
+                    }`}
+                    onClick={() => router.push(`/inventory/${product.id}`)}
+                  >
+                    <td className="px-4 py-3 font-mono text-xs text-text-secondary">
+                      {product.set_number ?? "—"}
+                    </td>
+                    <td className="px-4 py-3">
+                      {product.images?.[0] ? (
+                        <div className="relative h-10 w-10 overflow-hidden rounded-md border border-border">
+                          <Image src={resolveImageUrl(product.images[0])} alt={product.name} fill className="object-cover" />
+                        </div>
+                      ) : (
+                        <span className="text-xs text-text-muted">—</span>
+                      )}
+                    </td>
+                    <td className="px-4 py-3 font-medium text-text-primary max-w-48 truncate">
+                      {product.name}
+                    </td>
+                    <td className="px-4 py-3 text-text-secondary">
+                      {product.theme ?? "—"}
+                    </td>
+                    <td className="px-4 py-3">
+                      <Badge variant="neutral">
+                        {conditionLabel(product.condition)}
+                      </Badge>
+                    </td>
+                    <td className="px-4 py-3 text-right text-text-secondary">
+                      {formatCurrency(product.purchase_price)}
+                    </td>
+                    {/* Columna de precio: muestra sold_price con badge "venta" si está vendido */}
+                    <td className="px-4 py-3 text-right text-text-primary">
+                      <span className="inline-flex items-center justify-end gap-1.5">
+                        {formatCurrency(displayPrice)}
+                        {isSold && (
+                          <Badge variant="neutral">venta</Badge>
+                        )}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3 text-right">
+                      {marginBadge(marginPct)}
+                    </td>
+                    <td className="px-4 py-3">
+                      <Button
+                        variant={isSold ? "danger" : "secondary"}
+                        size="sm"
+                        className={isSold ? "h-8" : "h-8 border-status-success/30 text-status-success bg-status-success/10 hover:bg-status-success/20"}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (isSold) {
+                            // Revertir venta: sin modal
+                            onToggleAvailability?.(product.id, "sold");
+                          } else {
+                            // Marcar como vendido: abrir SellModal
+                            setSellTarget({
+                              productId: product.id,
+                              productName: product.name,
+                              suggestedPrice: marketPrice,
+                            });
+                          }
+                        }}
+                      >
+                        {isSold ? "Vendido" : "Disponible"}
+                      </Button>
+                    </td>
+                    <td className="px-4 py-3">
+                      <Link
+                        href={`/inventory/${product.id}`}
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <ExternalLink className="h-4 w-4 text-text-muted transition-colors hover:text-accent-lego" />
+                      </Link>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+
+        {/* Paginación */}
+        <div className="flex items-center justify-between border-t border-border px-4 py-3">
+          <p className="text-xs text-text-muted">
+            {total === 0
+              ? "Sin resultados"
+              : `${(page - 1) * size + 1}–${Math.min(page * size, total)} de ${total}`}
+          </p>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => onPageChange(page - 1)}
+              disabled={page <= 1}
+            >
+              <ChevronLeft className="h-4 w-4" />
+            </Button>
+            <span className="text-xs text-text-secondary">
+              {page} / {pages || 1}
+            </span>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => onPageChange(page + 1)}
+              disabled={page >= pages}
+            >
+              <ChevronRight className="h-4 w-4" />
+            </Button>
+          </div>
+        </div>
+      </div>
+    </>
+  );
+}
