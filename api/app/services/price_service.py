@@ -15,6 +15,7 @@ from app.schemas.price import (
     PriceAlertCreate,
     PriceDetailTrendPoint,
     PriceInsightProduct,
+    RealProfitSummary,
     TopMarginProduct,
 )
 
@@ -606,18 +607,16 @@ class DashboardService:
         insights.sort(key=lambda item: item.profit_eur or Decimal("-999999"), reverse=True)
         return insights
 
-
-    def get_real_profit_summary(self, db: Session):
+    def get_real_profit_summary(self, db: Session) -> RealProfitSummary:
         """Calcula el resumen de beneficios reales sobre productos vendidos."""
-        from app.schemas.price import RealProfitSummary
-
         products = db.query(Product).filter(
             Product.deleted_at.is_(None),
             Product.availability == "sold",
             Product.sold_price.isnot(None),
         ).all()
 
-        total_sold_items = len(products)
+        # total_sold_items = unidades físicas vendidas (quantity), no filas de BD
+        total_sold_items = sum(p.quantity or 1 for p in products)
         if total_sold_items == 0:
             return RealProfitSummary(
                 total_sold_items=0,
