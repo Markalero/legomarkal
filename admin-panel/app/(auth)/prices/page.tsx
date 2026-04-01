@@ -17,6 +17,8 @@ import { Button } from "@/components/ui/Button";
 import { RefreshPricesButton } from "@/components/ui/RefreshPricesButton";
 import { dashboardApi, pricesApi, productsApi } from "@/lib/api-client";
 import { conditionLabel, formatCurrency, formatDate } from "@/lib/utils";
+import { ChartRangeSelector } from "@/components/ui/ChartRangeSelector";
+import type { RangeKey } from "@/components/ui/ChartRangeSelector";
 import type { Condition, PriceInsightProduct, PriceTrendPoint, ProductPriceHistoryPoint } from "@/types";
 
 export default function PricesPage() {
@@ -124,6 +126,26 @@ export default function PricesPage() {
 
   const sortedGlobalTrends = [...globalTrends].sort((a, b) => a.date.localeCompare(b.date));
   const sortedSelectedHistory = [...selectedHistory].sort((a, b) => a.date.localeCompare(b.date));
+  const globalChartData = sortedGlobalTrends.map((point) => ({
+    ...point,
+    dateTs: new Date(point.date).getTime(),
+  }));
+  const selectedChartData = sortedSelectedHistory.map((point) => ({
+    ...point,
+    dateTs: new Date(point.date).getTime(),
+  }));
+  const [range, setRange] = useState<RangeKey>("6m");
+
+  function filterByRange<T extends { dateTs: number }>(data: T[]) {
+    if (range === "all") return data;
+    const end = data.reduce((m, d) => Math.max(m, d.dateTs), 0) || Date.now();
+    const months = range === "1m" ? 1 : range === "3m" ? 3 : 6;
+    const start = end - months * 30 * 24 * 60 * 60 * 1000;
+    return data.filter((d) => d.dateTs >= start);
+  }
+
+  const visibleGlobal = filterByRange(globalChartData);
+  const visibleSelected = filterByRange(selectedChartData);
   const highlightNew = selectedCondition === "SEALED";
   const yMaxGlobal = sortedGlobalTrends.reduce((max, point) => {
     const localMax = Math.max(Number(point.invested_value ?? 0), Number(point.market_value ?? 0));
@@ -174,11 +196,11 @@ export default function PricesPage() {
             )}
 
             <Card>
-              <div className="mb-4 flex items-center justify-between gap-3">
+                  <div className="mb-4 flex items-center justify-between gap-3">
                 <div>
                   <h3 className="text-sm font-semibold text-text-primary">
                     {selectedProductId
-                      ? `Histórico 6 meses · ${selectedProductName}`
+                      ? `Histórico de precios · ${selectedProductName}`
                       : "Tendencia global de cartera"}
                   </h3>
                   <p className="text-xs text-text-muted">
@@ -187,20 +209,23 @@ export default function PricesPage() {
                       : "Misma visualización que en dashboard: invertido y valor de mercado"}
                   </p>
                 </div>
-                {selectedProductId && (
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    onClick={() => {
-                      setSelectedProductId(null);
-                      setSelectedProductName("");
-                      setSelectedCondition(null);
-                      setSelectedHistory([]);
-                    }}
-                  >
-                    Ver gráfica global
-                  </Button>
-                )}
+                <div className="flex items-center gap-3">
+                  <ChartRangeSelector value={range} onChange={(v) => setRange(v)} />
+                  {selectedProductId && (
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      onClick={() => {
+                        setSelectedProductId(null);
+                        setSelectedProductName("");
+                        setSelectedCondition(null);
+                        setSelectedHistory([]);
+                      }}
+                    >
+                      Ver gráfica global
+                    </Button>
+                  )}
+                </div>
               </div>
 
               {!selectedProductId && sortedGlobalTrends.length === 0 ? (
@@ -210,12 +235,15 @@ export default function PricesPage() {
               ) : (
                 <ResponsiveContainer width="100%" height={280}>
                   <LineChart
-                    data={selectedProductId ? sortedSelectedHistory : sortedGlobalTrends}
+                    data={selectedProductId ? visibleSelected : visibleGlobal}
                     margin={{ top: 5, right: 10, left: 10, bottom: 5 }}
                   >
                     <CartesianGrid strokeDasharray="3 3" stroke="#2A2A2D" />
                     <XAxis
-                      dataKey="date"
+                      dataKey="dateTs"
+                      type="number"
+                      scale="time"
+                      domain={["dataMin", "dataMax"]}
                       tickFormatter={(v) => formatDate(v)}
                       tick={{ fill: "#71717A", fontSize: 11 }}
                       axisLine={{ stroke: "#2A2A2D" }}

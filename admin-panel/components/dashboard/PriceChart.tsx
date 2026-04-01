@@ -1,5 +1,6 @@
 // Gráfico comparativo inversión vs mercado para el dashboard principal
 "use client";
+import { useState } from "react";
 import {
   LineChart,
   Line,
@@ -12,6 +13,8 @@ import {
 } from "recharts";
 import { formatDate, formatCurrency } from "@/lib/utils";
 import type { PriceTrendPoint } from "@/types";
+import { ChartRangeSelector } from "@/components/ui/ChartRangeSelector";
+import type { RangeKey } from "@/components/ui/ChartRangeSelector";
 
 interface PriceChartProps {
   data: PriceTrendPoint[];
@@ -31,10 +34,22 @@ export function PriceChart({ data }: PriceChartProps) {
   const chartData = [...data]
     .sort((a, b) => a.date.localeCompare(b.date))
     .map((item) => ({
-      date: item.date,
+      dateTs: new Date(item.date).getTime(),
       invested: item.invested_value,
       market: item.market_value,
     }));
+
+  const [range, setRange] = useState<RangeKey>("6m");
+
+  function filterByRange(data: typeof chartData) {
+    if (range === "all") return data;
+    const end = data.reduce((m, d) => Math.max(m, d.dateTs), 0) || Date.now();
+    const months = range === "1m" ? 1 : range === "3m" ? 3 : 6;
+    const start = end - months * 30 * 24 * 60 * 60 * 1000;
+    return data.filter((d) => d.dateTs >= start);
+  }
+
+  const visible = filterByRange(chartData);
 
   const maxValue = chartData.reduce((max, point) => {
     const localMax = Math.max(point.invested ?? 0, point.market ?? 0);
@@ -51,11 +66,18 @@ export function PriceChart({ data }: PriceChartProps) {
   }
 
   return (
-    <ResponsiveContainer width="100%" height={260}>
-      <LineChart data={chartData} margin={{ top: 5, right: 10, left: 10, bottom: 5 }}>
+    <div>
+      <div className="mb-2 flex items-start justify-end">
+        <ChartRangeSelector value={range} onChange={(v) => setRange(v)} />
+      </div>
+      <ResponsiveContainer width="100%" height={260}>
+        <LineChart data={visible} margin={{ top: 5, right: 10, left: 10, bottom: 5 }}>
         <CartesianGrid strokeDasharray="3 3" stroke="#2A2A2D" />
         <XAxis
-          dataKey="date"
+          dataKey="dateTs"
+          type="number"
+          scale="time"
+          domain={["dataMin", "dataMax"]}
           tickFormatter={(v) => formatDate(v)}
           tick={{ fill: "#71717A", fontSize: 11 }}
           axisLine={{ stroke: "#2A2A2D" }}
@@ -104,6 +126,7 @@ export function PriceChart({ data }: PriceChartProps) {
           activeDot={{ r: 4 }}
         />
       </LineChart>
-    </ResponsiveContainer>
+      </ResponsiveContainer>
+    </div>
   );
 }

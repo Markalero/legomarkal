@@ -26,8 +26,8 @@ export function formatPct(value: number | null | undefined): string {
   return `${sign}${value.toFixed(1)}%`;
 }
 
-/** Formatea una fecha ISO como DD/MM/YYYY */
-export function formatDate(value: string | null | undefined): string {
+/** Formatea una fecha (ISO, timestamp o Date) como DD/MM/YYYY */
+export function formatDate(value: string | number | Date | null | undefined): string {
   if (!value) return "—";
   return new Date(value).toLocaleDateString("es-ES");
 }

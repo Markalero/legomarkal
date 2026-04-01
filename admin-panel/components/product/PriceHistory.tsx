@@ -1,5 +1,6 @@
 // Gráfico de evolución de precio condition-aware de un producto (fuente BrickLink)
 "use client";
+import { useState } from "react";
 import {
   LineChart,
   Line,
@@ -12,6 +13,8 @@ import {
 } from "recharts";
 import { formatDate, formatCurrency } from "@/lib/utils";
 import type { ProductPriceHistory, ProductPriceHistoryPoint } from "@/types";
+import { ChartRangeSelector } from "@/components/ui/ChartRangeSelector";
+import type { RangeKey } from "@/components/ui/ChartRangeSelector";
 
 interface PriceHistoryProps {
   history: ProductPriceHistory;
@@ -29,11 +32,23 @@ function selectPrice(
 }
 
 export function PriceHistory({ history, soldPrice, soldDate }: PriceHistoryProps) {
-  const chartData = history.points.map((p) => ({
-    date: p.date,
+  const baseData = history.points.map((p) => ({
+    dateTs: new Date(p.date).getTime(),
     // null permanece como null — no se convierte a 0 para no distorsionar la escala
     price: selectPrice(p, history.condition),
   }));
+
+  const [range, setRange] = useState<RangeKey>("6m");
+
+  function filterByRange(data: { dateTs: number; price: number | null }[]) {
+    if (range === "all") return data;
+    const end = data.reduce((m, d) => Math.max(m, d.dateTs), 0) || Date.now();
+    const months = range === "1m" ? 1 : range === "3m" ? 3 : 6;
+    const start = end - months * 30 * 24 * 60 * 60 * 1000;
+    return data.filter((d) => d.dateTs >= start);
+  }
+
+  const chartData = filterByRange(baseData);
 
   // Estado vacío: todos los puntos son nulos
   if (chartData.every((d) => d.price === null)) {
@@ -51,12 +66,21 @@ export function PriceHistory({ history, soldPrice, soldDate }: PriceHistoryProps
   const maxVal = allValues.length > 0 ? Math.max(...allValues) : 100;
   const yMax = Math.ceil(maxVal * 1.1);
 
+  const soldDateTs = soldDate ? new Date(soldDate).getTime() : null;
+
   return (
-    <ResponsiveContainer width="100%" height={220}>
-      <LineChart data={chartData} margin={{ top: 5, right: 10, left: 5, bottom: 5 }}>
+    <div>
+      <div className="mb-2 flex items-start justify-end">
+        <ChartRangeSelector value={range} onChange={(v) => setRange(v)} />
+      </div>
+      <ResponsiveContainer width="100%" height={220}>
+        <LineChart data={chartData} margin={{ top: 5, right: 10, left: 5, bottom: 5 }}>
         <CartesianGrid strokeDasharray="3 3" stroke="#2A2A2D" />
         <XAxis
-          dataKey="date"
+          dataKey="dateTs"
+          type="number"
+          scale="time"
+          domain={["dataMin", "dataMax"]}
           tickFormatter={formatDate}
           tick={{ fill: "#71717A", fontSize: 11 }}
           axisLine={{ stroke: "#2A2A2D" }}
@@ -81,9 +105,9 @@ export function PriceHistory({ history, soldPrice, soldDate }: PriceHistoryProps
           labelFormatter={formatDate}
         />
         {/* Marcador vertical de venta real */}
-        {soldPrice != null && soldDate != null && (
+        {soldPrice != null && soldDateTs != null && (
           <ReferenceLine
-            x={soldDate}
+            x={soldDateTs}
             stroke="#10B981"
             strokeDasharray="4 4"
             label={{
@@ -106,6 +130,7 @@ export function PriceHistory({ history, soldPrice, soldDate }: PriceHistoryProps
           connectNulls={false}
         />
       </LineChart>
-    </ResponsiveContainer>
+      </ResponsiveContainer>
+    </div>
   );
 }

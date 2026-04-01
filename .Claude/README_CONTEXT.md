@@ -22,6 +22,7 @@ Fecha de actualización: 2026-04-01 (fix validación BrickLink en alta rápida +
 - Dashboard actualizado con comparativa temporal de dinero invertido vs valor de mercado (incluye beneficio potencial).
 - Módulo de precios ampliado con gráfica temporal detallada (mínimo/media/máximo diario) y ranking de sets por beneficio en euros.
 - API de productos ampliada con alta rápida: `POST /products/quick-add` (set_number + datos mínimos), autocompletando nombre/tema/año/imagen principal desde BrickLink.
+- Al crear/importar productos con `set_number`, backend precarga histórico en `market_prices`: 6 meses previos (sin mes actual) guardados a fin de mes + snapshot actual, para que la gráfica tenga contexto desde el primer momento.
 - Parser de metadatos BrickLink endurecido: fallback de nombre desde `h1`/`title` cuando falta `og:title`, evitando falsos negativos al validar sets reales como `7965`.
 - Parser de precios BrickLink ajustado para priorizar importes `EUR` cuando la celda incluye múltiples monedas y persistencia final normalizada siempre a `EUR` en `market_prices`.
 - Parser de precios BrickLink endurecido para Price Guide por moneda (`cID=N`): usa dataset EUR+USD convertido a EUR, ignora RON/ROL y soporta tokens con espacios no separables (`US\u00A0$`).

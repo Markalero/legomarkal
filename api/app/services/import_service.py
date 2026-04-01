@@ -5,7 +5,7 @@ from typing import List, Tuple
 from sqlalchemy.orm import Session
 
 from app.models.product import Product
-from app.schemas.product import ProductCreate
+from app.services.product_service import product_service
 
 
 def parse_csv_or_excel(file_bytes: bytes, filename: str) -> List[dict]:
@@ -34,6 +34,7 @@ def bulk_import(db: Session, file_bytes: bytes, filename: str) -> Tuple[int, Lis
     rows = parse_csv_or_excel(file_bytes, filename)
     created = 0
     errors = []
+    created_products: list[Product] = []
 
     for i, row in enumerate(rows, start=2):  # fila 2 = primera de datos
         name = row.get("name") or row.get("nombre")
@@ -54,9 +55,19 @@ def bulk_import(db: Session, file_bytes: bytes, filename: str) -> Tuple[int, Lis
             availability="available",
         )
         db.add(product)
+        created_products.append(product)
         created += 1
 
     db.commit()
+
+    for product in created_products:
+        try:
+            product_service.enrich_market_history_if_possible(db, product)
+        except Exception:
+            errors.append(
+                f"Producto {product.set_number or product.name}: no se pudo cargar histórico de precios de los últimos 6 meses"
+            )
+
     return created, errors
 
 

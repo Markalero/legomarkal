@@ -1,5 +1,6 @@
 # Lógica de negocio para precios de mercado y alertas
 from collections import defaultdict
+import calendar
 from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
 from typing import List, Optional
@@ -22,6 +23,43 @@ from app.schemas.price import (
 
 class PriceService:
     """Consultas y escritura de snapshots de precios de mercado."""
+
+    def _interpolate_month_price(
+        self,
+        min_value: Optional[Decimal],
+        current_value: Optional[Decimal],
+        max_value: Optional[Decimal],
+        progress: Decimal,
+    ) -> Optional[Decimal]:
+        """Genera un valor mensual aproximado entre el rango conocido y el valor actual."""
+        if current_value is None:
+            return None
+
+        current = Decimal(str(current_value))
+        min_price = Decimal(str(min_value)) if min_value is not None else current
+        max_price = Decimal(str(max_value)) if max_value is not None else current
+
+        if max_price < min_price:
+            min_price, max_price = max_price, min_price
+
+        if min_price == max_price:
+            # Si el rango viene plano, añadimos una pendiente suave para evitar series totalmente planas.
+            span = current * Decimal("0.06")
+            start = (current - span).quantize(Decimal("0.01"))
+            end = (current + span).quantize(Decimal("0.01"))
+            value = start + (end - start) * progress
+            return value.quantize(Decimal("0.01"))
+
+        # Si el valor actual cae en un extremo del rango, usamos el otro extremo como origen.
+        if current == min_price and max_price > min_price:
+            start, end = max_price, current
+        elif current == max_price and min_price < max_price:
+            start, end = min_price, current
+        else:
+            start, end = min_price, current
+
+        value = start + (end - start) * progress
+        return value.quantize(Decimal("0.01"))
 
     def get_price_history(self, db: Session, product_id: UUID) -> List[MarketPrice]:
         self._backfill_monthly_history(db, product_id)
@@ -218,6 +256,98 @@ class PriceService:
         db.commit()
         db.refresh(price)
         return price
+
+    def seed_last_six_months_history(
+        self,
+        db: Session,
+        product_id: UUID,
+        source: str,
+        data: dict,
+        months: int = 6,
+    ) -> None:
+        """Guarda histórico mensual de N meses previos (sin incluir el mes actual).
+
+        Cada punto se persiste en el último día de su mes para mostrar una serie
+        histórica estable al importar/crear un producto.
+        """
+        if months <= 0:
+            return
+
+        today = datetime.now(timezone.utc).date()
+        normalized_data = {**data, "currency": "EUR"}
+
+        for months_ago in range(months, 0, -1):
+            progress_index = months - months_ago + 1
+            progress = Decimal(progress_index) / Decimal(months)
+
+            year = today.year
+            month = today.month - months_ago
+            while month <= 0:
+                month += 12
+                year -= 1
+
+            last_day = calendar.monthrange(year, month)[1]
+            month_end = date(year, month, last_day)
+            fetched_at = datetime(year, month, last_day, 23, 59, 59, tzinfo=timezone.utc)
+
+            existing = (
+                db.query(MarketPrice)
+                .filter(
+                    MarketPrice.product_id == product_id,
+                    MarketPrice.source == source,
+                    cast(MarketPrice.fetched_at, SADate) == month_end,
+                )
+                .order_by(MarketPrice.fetched_at.desc())
+                .all()
+            )
+
+            month_price_new = self._interpolate_month_price(
+                normalized_data.get("min_price_new"),
+                normalized_data.get("price_new"),
+                normalized_data.get("max_price_new"),
+                progress,
+            )
+            month_price_used = self._interpolate_month_price(
+                normalized_data.get("min_price_used"),
+                normalized_data.get("price_used"),
+                normalized_data.get("max_price_used"),
+                progress,
+            )
+            month_min_new = normalized_data.get("min_price_new") or month_price_new
+            month_max_new = normalized_data.get("max_price_new") or month_price_new
+            month_min_used = normalized_data.get("min_price_used") or month_price_used
+            month_max_used = normalized_data.get("max_price_used") or month_price_used
+
+            if existing:
+                price = existing[0]
+                price.price_new = month_price_new
+                price.price_used = month_price_used
+                price.min_price_new = month_min_new
+                price.max_price_new = month_max_new
+                price.min_price_used = month_min_used
+                price.max_price_used = month_max_used
+                price.currency = "EUR"
+                price.fetched_at = fetched_at
+
+                for duplicate in existing[1:]:
+                    db.delete(duplicate)
+            else:
+                db.add(
+                    MarketPrice(
+                        product_id=product_id,
+                        source=source,
+                        price_new=month_price_new,
+                        price_used=month_price_used,
+                        min_price_new=month_min_new,
+                        max_price_new=month_max_new,
+                        min_price_used=month_min_used,
+                        max_price_used=month_max_used,
+                        currency="EUR",
+                        fetched_at=fetched_at,
+                    )
+                )
+
+        db.commit()
 
     def get_latest_price_by_set_number(self, db: Session, set_number: str) -> Optional[MarketPrice]:
         product = (

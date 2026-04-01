@@ -94,6 +94,8 @@ class ProductService:
         db.add(product)
         db.commit()
         db.refresh(product)
+
+        self.enrich_market_history_if_possible(db, product)
         return product
 
     def create_product_from_set(self, db: Session, data: ProductQuickCreate) -> Product:
@@ -145,23 +147,86 @@ class ProductService:
         db.refresh(product)
 
         if live_price:
-            price_service.save_price(
-                db,
-                product.id,
-                "bricklink",
-                {
-                    "price_new": live_price.price_new,
-                    "price_used": live_price.price_used,
-                    "min_price_new": live_price.min_price_new,
-                    "max_price_new": live_price.max_price_new,
-                    "min_price_used": live_price.min_price_used,
-                    "max_price_used": live_price.max_price_used,
-                    "currency": live_price.currency,
-                    "fetched_at": datetime.now(timezone.utc),
-                },
-            )
+            self._save_price_history_snapshots(db, product.id, live_price)
 
         return product
+
+    def _save_price_history_snapshots(self, db: Session, product_id: UUID, live_price) -> None:
+        """Guarda histórico de 6 meses (fin de mes) y snapshot actual."""
+        from app.services.price_service import price_service
+
+        payload = {
+            "price_new": live_price.price_new,
+            "price_used": live_price.price_used,
+            "min_price_new": live_price.min_price_new,
+            "max_price_new": live_price.max_price_new,
+            "min_price_used": live_price.min_price_used,
+            "max_price_used": live_price.max_price_used,
+            "currency": live_price.currency,
+            "fetched_at": datetime.now(timezone.utc),
+        }
+
+        price_service.seed_last_six_months_history(
+            db,
+            product_id=product_id,
+            source="bricklink",
+            data=payload,
+            months=6,
+        )
+        price_service.save_price(db, product_id, "bricklink", payload)
+
+    def enrich_market_history_if_possible(self, db: Session, product: Product) -> None:
+        """Intenta rellenar metadatos e histórico de precios al crear/importar."""
+        if not product.set_number:
+            return
+
+        from app.scraper.bricklink_scraper import BrickLinkScraper
+
+        query_set = self._normalize_set_for_query(product.set_number)
+
+        async def _fetch_data(set_number: str):
+            scraper = BrickLinkScraper()
+            try:
+                metadata_value = await scraper.fetch_set_metadata(set_number)
+                live_price_value = await scraper.fetch_with_retry(set_number)
+                return metadata_value, live_price_value
+            finally:
+                await scraper.close()
+
+        try:
+            metadata, live_price = asyncio.run(_fetch_data(query_set))
+        except Exception:
+            return
+
+        changed = False
+        if metadata:
+            if not product.theme and metadata.get("theme"):
+                product.theme = metadata.get("theme")
+                changed = True
+
+            if not product.year_released and metadata.get("year_released"):
+                product.year_released = metadata.get("year_released")
+                changed = True
+
+            if not (product.images or []) and metadata.get("image_url"):
+                product.images = [metadata.get("image_url")]
+                changed = True
+
+            current_name = (product.name or "").strip()
+            if metadata.get("name") and (
+                not current_name
+                or re.match(r"(?i)^test\b", current_name)
+                or re.match(r"(?i)^lego\s*\d{3,8}(?:-\d+)?$", current_name)
+            ):
+                product.name = metadata.get("name")
+                changed = True
+
+        if changed:
+            db.commit()
+            db.refresh(product)
+
+        if live_price and (live_price.price_new is not None or live_price.price_used is not None):
+            self._save_price_history_snapshots(db, product.id, live_price)
 
     def update_product(self, db: Session, product_id: UUID, data: ProductUpdate) -> Optional[Product]:
         product = self.get_product(db, product_id)

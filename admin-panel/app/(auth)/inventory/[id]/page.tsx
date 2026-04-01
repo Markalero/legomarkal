@@ -311,9 +311,9 @@ export default function ProductDetailPage({ params }: Props) {
             {/* Alertas del producto */}
             <Card>
               <CardTitle className="mb-4">Alertas ({alerts.length})</CardTitle>
-              <div className="mb-4 space-y-2 rounded-lg border border-border bg-bg-elevated p-3">
+              <div className="mb-4 space-y-3 rounded-lg border border-border bg-bg-elevated p-3">
                 <p className="text-xs font-medium text-text-secondary">Crear alerta rápida</p>
-                <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+                <div className="grid grid-cols-1 gap-2">
                   <select
                     value={alertType}
                     onChange={(e) =>
@@ -325,6 +325,8 @@ export default function ProductDetailPage({ params }: Props) {
                     <option value="PRICE_ABOVE">Precio por encima de</option>
                     <option value="PRICE_CHANGE_PCT">Cambio de precio (%)</option>
                   </select>
+                </div>
+                <div className="grid grid-cols-1 gap-2 sm:grid-cols-[minmax(0,1fr)_auto]">
                   <input
                     type="number"
                     value={alertThreshold}
@@ -338,6 +340,7 @@ export default function ProductDetailPage({ params }: Props) {
                     onClick={handleCreateAlert}
                     loading={creatingAlert}
                     disabled={!alertThreshold}
+                    className="w-full sm:w-auto"
                   >
                     <BellPlus className="h-4 w-4" />
                     Añadir alerta
