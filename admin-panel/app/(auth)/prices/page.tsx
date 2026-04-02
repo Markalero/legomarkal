@@ -518,6 +518,7 @@ export default function PricesPage() {
                           fillOpacity={0}
                           connectNulls
                           isAnimationActive={false}
+                          activeDot={{ r: 5, fill: "#F59E0B", stroke: "#FFFFFF", strokeWidth: 1 }}
                           legendType="none"
                         />
                         <Area
@@ -528,6 +529,7 @@ export default function PricesPage() {
                           fill="#F59E0B"
                           fillOpacity={highlightNew ? 0.24 : 0.12}
                           connectNulls
+                          activeDot={{ r: 5, fill: "#F59E0B", stroke: "#FFFFFF", strokeWidth: 1 }}
                           legendType="none"
                         />
                         <Area
@@ -538,6 +540,7 @@ export default function PricesPage() {
                           fillOpacity={0}
                           connectNulls
                           isAnimationActive={false}
+                          activeDot={{ r: 5, fill: "#3B82F6", stroke: "#FFFFFF", strokeWidth: 1 }}
                           legendType="none"
                         />
                         <Area
@@ -548,6 +551,7 @@ export default function PricesPage() {
                           fill="#3B82F6"
                           fillOpacity={highlightUsed ? 0.24 : 0.12}
                           connectNulls
+                          activeDot={{ r: 5, fill: "#3B82F6", stroke: "#FFFFFF", strokeWidth: 1 }}
                           legendType="none"
                         />
                         {selectedPurchasePrice !== null && (
