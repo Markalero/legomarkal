@@ -51,11 +51,18 @@ export function PriceChart({ data }: PriceChartProps) {
 
   const visible = filterByRange(chartData);
 
-  const maxValue = chartData.reduce((max, point) => {
-    const localMax = Math.max(point.invested ?? 0, point.market ?? 0);
-    return Math.max(max, localMax);
-  }, 0);
-  const yMax = maxValue > 0 ? Math.ceil(maxValue * 1.08) : 100;
+  const values = visible.flatMap((point) => [point.invested, point.market]);
+  const nums = values
+    .map((v) => (v == null ? null : Number(v)))
+    .filter((v): v is number => v != null && Number.isFinite(v));
+  const positiveNums = nums.filter((v) => v > 0);
+  const axisNums = positiveNums.length > 0 ? positiveNums : nums;
+  const minValue = axisNums.length > 0 ? Math.min(...axisNums) : 0;
+  const maxValue = axisNums.length > 0 ? Math.max(...axisNums) : 100;
+  const yMin = Math.max(0, Number((minValue - Math.max(minValue * 0.03, 1)).toFixed(2)));
+  const yMax = maxValue > minValue
+    ? Number((maxValue + Math.max(maxValue * 0.03, 1)).toFixed(2))
+    : Number((maxValue + Math.max(maxValue * 0.05, 1)).toFixed(2));
 
   if (chartData.length === 0) {
     return (
@@ -84,7 +91,7 @@ export function PriceChart({ data }: PriceChartProps) {
           tickLine={false}
         />
         <YAxis
-          domain={[0, yMax]}
+          domain={[yMin, yMax]}
           tickFormatter={(v) => `${v}€`}
           tick={{ fill: "#71717A", fontSize: 11 }}
           axisLine={false}

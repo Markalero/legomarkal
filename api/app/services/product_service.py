@@ -59,12 +59,19 @@ class ProductService:
 
         # Enriquecer con el último snapshot de precio para consumo del frontend.
         for p in items:
+            condition_price_filter = (
+                MarketPrice.price_new.isnot(None)
+                if p.condition == "SEALED"
+                else MarketPrice.price_used.isnot(None)
+            )
             latest = (
                 db.query(MarketPrice)
                 .join(Product, MarketPrice.product_id == Product.id)
                 .filter(
                     Product.set_number == p.set_number,
                     Product.deleted_at.is_(None),
+                    MarketPrice.source == "bricklink",
+                    condition_price_filter,
                 )
                 .order_by(MarketPrice.fetched_at.desc())
                 .first()
@@ -84,12 +91,20 @@ class ProductService:
         if not product:
             return None
 
+        condition_price_filter = (
+            MarketPrice.price_new.isnot(None)
+            if product.condition == "SEALED"
+            else MarketPrice.price_used.isnot(None)
+        )
+
         latest = (
             db.query(MarketPrice)
             .join(Product, MarketPrice.product_id == Product.id)
             .filter(
                 Product.set_number == product.set_number,
                 Product.deleted_at.is_(None),
+                MarketPrice.source == "bricklink",
+                condition_price_filter,
             )
             .order_by(MarketPrice.fetched_at.desc())
             .first()

@@ -59,12 +59,21 @@ export function PriceHistory({ history, soldPrice, soldDate }: PriceHistoryProps
     );
   }
 
-  // Dominio Y dinámico con +10% de margen visual
+  // Dominio Y dinámico con margen inferior/superior para evitar zonas vacías.
   const allValues = chartData
     .map((d) => d.price)
     .filter((v): v is number => v !== null);
-  const maxVal = allValues.length > 0 ? Math.max(...allValues) : 100;
-  const yMax = Math.ceil(maxVal * 1.1);
+  if (soldPrice != null) {
+    allValues.push(soldPrice);
+  }
+  const positiveValues = allValues.filter((v) => v > 0);
+  const axisValues = positiveValues.length > 0 ? positiveValues : allValues;
+  const minVal = axisValues.length > 0 ? Math.min(...axisValues) : 0;
+  const maxVal = axisValues.length > 0 ? Math.max(...axisValues) : 100;
+  const yMin = Math.max(0, Number((minVal - Math.max(minVal * 0.03, 1)).toFixed(2)));
+  const yMax = maxVal > minVal
+    ? Number((maxVal + Math.max(maxVal * 0.03, 1)).toFixed(2))
+    : Number((maxVal + Math.max(maxVal * 0.05, 1)).toFixed(2));
 
   const soldDateTs = soldDate ? new Date(soldDate).getTime() : null;
 
@@ -87,7 +96,7 @@ export function PriceHistory({ history, soldPrice, soldDate }: PriceHistoryProps
           tickLine={false}
         />
         <YAxis
-          domain={[0, yMax]}
+          domain={[yMin, yMax]}
           tickFormatter={(v) => `${v}€`}
           tick={{ fill: "#71717A", fontSize: 11 }}
           axisLine={false}
@@ -127,7 +136,7 @@ export function PriceHistory({ history, soldPrice, soldDate }: PriceHistoryProps
           strokeWidth={2}
           dot={false}
           activeDot={{ r: 4 }}
-          connectNulls={false}
+          connectNulls
         />
       </LineChart>
       </ResponsiveContainer>

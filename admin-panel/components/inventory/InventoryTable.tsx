@@ -116,9 +116,9 @@ export function InventoryTable({ data, onPageChange, onToggleAvailability }: Inv
               )}
               {items.map((product: Product) => {
                 const marketPrice =
-                  product.latest_market_price?.price_new ??
-                  product.latest_market_price?.price_used ??
-                  null;
+                  product.condition === "SEALED"
+                    ? (product.latest_market_price?.price_new ?? null)
+                    : (product.latest_market_price?.price_used ?? null);
                 const isSold = product.availability === "sold";
                 const range = getRangeByCondition(product);
 

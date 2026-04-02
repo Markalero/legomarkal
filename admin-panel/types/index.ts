@@ -182,6 +182,10 @@ export interface ProductPriceHistoryPoint {
   date: string;
   price_new: number | null;
   price_used: number | null;
+  min_price_new?: number | null;
+  max_price_new?: number | null;
+  min_price_used?: number | null;
+  max_price_used?: number | null;
 }
 
 export interface ProductPriceHistory {

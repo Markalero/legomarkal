@@ -2,7 +2,7 @@
 "use client";
 import { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
-import { Plus, Download, Upload, SlidersHorizontal, PlusCircle, X } from "lucide-react";
+import { RefreshCw, Plus, Download, Upload, SlidersHorizontal, PlusCircle, X } from "lucide-react";
 import { Header } from "@/components/layout/Header";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
@@ -10,7 +10,8 @@ import { Modal } from "@/components/ui/Modal";
 import { FilterBar } from "@/components/inventory/FilterBar";
 import { InventoryTable } from "@/components/inventory/InventoryTable";
 import { BulkImport } from "@/components/inventory/BulkImport";
-import { productsApi } from "@/lib/api-client";
+import { RefreshPricesButton } from "@/components/ui/RefreshPricesButton";
+import { dashboardApi, productsApi } from "@/lib/api-client";
 import type { ProductListOut, ProductFilters } from "@/types";
 
 const DEFAULT_FILTERS: ProductFilters = { page: 1, size: 20 };
@@ -25,6 +26,9 @@ export default function InventoryPage() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [purchaseSources, setPurchaseSources] = useState<string[]>([]);
   const [newPurchaseSource, setNewPurchaseSource] = useState("");
+  const [refreshingAll, setRefreshingAll] = useState(false);
+  const [refreshProgress, setRefreshProgress] = useState(0);
+  const [refreshStatus, setRefreshStatus] = useState("");
 
   const load = useCallback(async (f: ProductFilters) => {
     setLoading(true);
@@ -49,6 +53,66 @@ export default function InventoryPage() {
       setPurchaseSources(JSON.parse(storedSources));
     }
   }, []);
+
+  function startPredictiveProgress(totalModels: number): () => void {
+    const ceiling = 82;
+    const expectedDurationMs = Math.max(6000, totalModels * 2200);
+    const startTs = Date.now();
+
+    const timer = window.setInterval(() => {
+      const elapsed = Date.now() - startTs;
+      const ratio = Math.min(1, elapsed / expectedDurationMs);
+      const eased = 1 - Math.pow(1 - ratio, 2);
+      const predicted = Math.round(8 + (ceiling - 8) * eased);
+      setRefreshProgress((prev) => Math.max(prev, predicted));
+    }, 300);
+
+    return () => window.clearInterval(timer);
+  }
+
+  async function handleRefreshAllPrices() {
+    setRefreshingAll(true);
+    setRefreshProgress(8);
+    setRefreshStatus("Preparando sincronización");
+
+    let stopPredictor: (() => void) | null = null;
+    try {
+      const totalModels = (await productsApi.list({ page: 1, size: 1 })).total || 1;
+      const estimatedOps = totalModels * 2 + 4;
+      setRefreshStatus(`Procesando ~${estimatedOps} operaciones (${totalModels} modelos)`);
+
+      // 1) Refresco rápido de UI con datos actuales de BBDD.
+      await load(filters);
+      setRefreshProgress(18);
+      setRefreshStatus("Sincronizando precios de mercado");
+
+      stopPredictor = startPredictiveProgress(totalModels);
+
+      // 2) Refresco completo forzando cobertura diaria para todos los productos.
+      const execution = await dashboardApi.refreshAllPricesCompat();
+      if (execution.mode === "background") {
+        setRefreshProgress(60);
+        setRefreshStatus("Esperando finalización del refresco");
+        await new Promise((resolve) => setTimeout(resolve, 2500));
+      }
+
+      stopPredictor?.();
+      stopPredictor = null;
+
+      setRefreshProgress(88);
+      setRefreshStatus("Recalculando cartera diaria completa");
+      // 3) Refresco final para pintar resultados actualizados.
+      await load(filters);
+      setRefreshProgress(100);
+      setRefreshStatus("Completado");
+      await new Promise((resolve) => setTimeout(resolve, 450));
+    } finally {
+      stopPredictor?.();
+      setRefreshingAll(false);
+      setRefreshProgress(0);
+      setRefreshStatus("");
+    }
+  }
 
   function handleFilterChange(f: ProductFilters) {
     setFilters(f);
@@ -106,6 +170,12 @@ export default function InventoryPage() {
         description={data ? `${data.total} productos` : "Cargando…"}
         actions={
           <div className="flex gap-2">
+            <RefreshPricesButton
+              loading={refreshingAll}
+              onClick={handleRefreshAllPrices}
+              progress={refreshProgress}
+              statusText={refreshStatus}
+            />
             <Button variant="secondary" size="sm" onClick={handleExport}>
               <Download className="h-4 w-4" />
               Exportar CSV
@@ -200,6 +270,18 @@ export default function InventoryPage() {
           </div>
         </div>
       </Modal>
+
+      {refreshingAll && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-[1px]">
+          <div className="rounded-xl border border-border bg-bg-card px-5 py-4 text-center shadow-xl">
+            <p className="text-sm font-medium text-text-primary">Actualizando precios…</p>
+            <RefreshCw className="mx-auto mt-3 h-12 w-12 animate-spin text-accent-lego" />
+            <p className="mt-3 text-xs text-text-muted">
+              {refreshStatus || "Sincronizando datos"} · {Math.round(refreshProgress)}%
+            </p>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

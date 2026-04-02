@@ -224,6 +224,18 @@ export default function DashboardPage() {
           <AlertFeed alerts={alerts.filter((a) => a.is_active)} />
         </Card>
       </div>
+
+      {scraping && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-[1px]">
+          <div className="rounded-xl border border-border bg-bg-card px-5 py-4 text-center shadow-xl">
+            <p className="text-sm font-medium text-text-primary">Actualizando precios…</p>
+            <RefreshCw className="mx-auto mt-3 h-12 w-12 animate-spin text-accent-lego" />
+            <p className="mt-3 text-xs text-text-muted">
+              {refreshStatus || "Sincronizando datos"} · {Math.round(refreshProgress)}%
+            </p>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

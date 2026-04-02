@@ -3,14 +3,17 @@
 import { useEffect, useState, useCallback } from "react";
 import {
   ResponsiveContainer,
-  LineChart,
+  ComposedChart,
   Line,
+  Area,
   CartesianGrid,
   XAxis,
   YAxis,
   Tooltip,
   Legend,
+  ReferenceLine,
 } from "recharts";
+import { RefreshCw } from "lucide-react";
 import { Header } from "@/components/layout/Header";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
@@ -27,6 +30,9 @@ export default function PricesPage() {
   const [selectedProductId, setSelectedProductId] = useState<string | null>(null);
   const [selectedProductName, setSelectedProductName] = useState<string>("");
   const [selectedCondition, setSelectedCondition] = useState<Condition | null>(null);
+  const [selectedPurchasePrice, setSelectedPurchasePrice] = useState<number | null>(null);
+  const [selectedFallbackBandMin, setSelectedFallbackBandMin] = useState<number | null>(null);
+  const [selectedFallbackBandMax, setSelectedFallbackBandMax] = useState<number | null>(null);
   const [selectedHistory, setSelectedHistory] = useState<ProductPriceHistoryPoint[]>([]);
   const [fallbackMode, setFallbackMode] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -44,9 +50,9 @@ export default function PricesPage() {
     const fallbackInsights: PriceInsightProduct[] = products.items
       .map((product) => {
         const currentPrice =
-          product.latest_market_price?.price_new ??
-          product.latest_market_price?.price_used ??
-          null;
+          product.condition === "SEALED"
+            ? (product.latest_market_price?.price_new ?? null)
+            : (product.latest_market_price?.price_used ?? null);
         const purchasePrice = product.purchase_price ?? null;
         const profit =
           currentPrice !== null && purchasePrice !== null
@@ -169,6 +175,9 @@ export default function PricesPage() {
     setSelectedProductId(product.id);
     setSelectedProductName(product.name);
     setSelectedCondition(product.condition);
+    setSelectedPurchasePrice(product.purchase_price ?? null);
+    setSelectedFallbackBandMin(toNum(product.min_market_price));
+    setSelectedFallbackBandMax(toNum(product.max_market_price));
     try {
       const trend = await pricesApi.trend(product.id, 6, "sold");
       setSelectedHistory(trend.points);
@@ -179,14 +188,79 @@ export default function PricesPage() {
 
   const sortedGlobalTrends = [...globalTrends].sort((a, b) => a.date.localeCompare(b.date));
   const sortedSelectedHistory = [...selectedHistory].sort((a, b) => a.date.localeCompare(b.date));
+  const toNum = (value: number | null | undefined) => {
+    if (value == null) return null;
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
+  };
+  const toBand = (
+    minV: number | null | undefined,
+    maxV: number | null | undefined,
+    mainV?: number | null,
+    fallbackMinV?: number | null,
+    fallbackMaxV?: number | null,
+  ) => {
+    const explicitMin = toNum(minV);
+    const explicitMax = toNum(maxV);
+    const fallbackMin = toNum(fallbackMinV);
+    const fallbackMax = toNum(fallbackMaxV);
+    const main = toNum(mainV);
+
+    let minN = explicitMin;
+    let maxN = explicitMax;
+
+    // Si faltan límites por punto, usa amplitud fallback centrada en el precio del punto.
+    if ((minN == null || maxN == null) && main != null && fallbackMin != null && fallbackMax != null) {
+      const fallbackSpan = Math.max(0, fallbackMax - fallbackMin);
+      if (fallbackSpan > 0) {
+        minN = Math.max(0, Number((main - fallbackSpan / 2).toFixed(2)));
+        maxN = Number((main + fallbackSpan / 2).toFixed(2));
+      }
+    }
+
+    if (minN == null || maxN == null) {
+      return { min: null, max: null, span: null };
+    }
+    const min = Math.min(minN, maxN);
+    const max = Math.max(minN, maxN);
+    return {
+      min,
+      max,
+      span: Number((max - min).toFixed(2)),
+    };
+  };
+
   const globalChartData = sortedGlobalTrends.map((point) => ({
     ...point,
     dateTs: new Date(point.date).getTime(),
   }));
-  const selectedChartData = sortedSelectedHistory.map((point) => ({
-    ...point,
-    dateTs: new Date(point.date).getTime(),
-  }));
+  const selectedChartData = sortedSelectedHistory.map((point) => {
+    const newBand = toBand(
+      point.min_price_new,
+      point.max_price_new,
+      point.price_new,
+      selectedCondition === "SEALED" ? selectedFallbackBandMin : null,
+      selectedCondition === "SEALED" ? selectedFallbackBandMax : null,
+    );
+    const usedBand = toBand(
+      point.min_price_used,
+      point.max_price_used,
+      point.price_used,
+      selectedCondition !== "SEALED" ? selectedFallbackBandMin : null,
+      selectedCondition !== "SEALED" ? selectedFallbackBandMax : null,
+    );
+
+    return {
+      ...point,
+      dateTs: new Date(point.date).getTime(),
+      newBandMin: newBand.min,
+      newBandMax: newBand.max,
+      newBandSpan: newBand.span,
+      usedBandMin: usedBand.min,
+      usedBandMax: usedBand.max,
+      usedBandSpan: usedBand.span,
+    };
+  });
   const [range, setRange] = useState<RangeKey>("6m");
 
   function filterByRange<T extends { dateTs: number }>(data: T[]) {
@@ -200,17 +274,121 @@ export default function PricesPage() {
   const visibleGlobal = filterByRange(globalChartData);
   const visibleSelected = filterByRange(selectedChartData);
   const highlightNew = selectedCondition === "SEALED";
-  const yMaxGlobal = sortedGlobalTrends.reduce((max, point) => {
-    const localMax = Math.max(Number(point.invested_value ?? 0), Number(point.market_value ?? 0));
-    return Math.max(max, localMax);
-  }, 0);
-  const yMaxSelected = sortedSelectedHistory.reduce((max, point) => {
-    const localMax = Math.max(Number(point.price_new ?? 0), Number(point.price_used ?? 0));
-    return Math.max(max, localMax);
-  }, 0);
-  const currentMax = selectedProductId ? yMaxSelected : yMaxGlobal;
-  const yMax = currentMax > 0 ? Math.ceil(currentMax * 1.08) : 100;
+  const highlightUsed = selectedCondition !== "SEALED";
+  const domainFromValues = (values: Array<number | null | undefined>) => {
+    const nums = values
+      .map((v) => (v == null ? null : Number(v)))
+      .filter((v): v is number => v != null && Number.isFinite(v));
+
+    if (nums.length === 0) return [0, 100] as const;
+
+    const positiveNums = nums.filter((v) => v > 0);
+    const axisNums = positiveNums.length > 0 ? positiveNums : nums;
+    const minVal = Math.min(...axisNums);
+    const maxVal = Math.max(...axisNums);
+
+    if (maxVal <= minVal) {
+      const pad = Math.max(minVal * 0.05, 1);
+      return [Math.max(0, Number((minVal - pad).toFixed(2))), Number((maxVal + pad).toFixed(2))] as const;
+    }
+
+    return [
+      Math.max(0, Number((minVal - Math.max(minVal * 0.03, 1)).toFixed(2))),
+      Number((maxVal + Math.max(maxVal * 0.03, 1)).toFixed(2)),
+    ] as const;
+  };
+
+  const selectedValues = visibleSelected.flatMap((point) => [
+    point.price_new,
+    point.price_used,
+    point.newBandMin,
+    point.newBandMax,
+    point.usedBandMin,
+    point.usedBandMax,
+    selectedPurchasePrice,
+  ]);
+  const globalValues = visibleGlobal.flatMap((point) => [
+    point.invested_value,
+    point.market_value,
+  ]);
+
+  const [yMin, yMax] = selectedProductId
+    ? domainFromValues(selectedValues)
+    : domainFromValues(globalValues);
   const maxProfit = Math.max(...insights.map(p => Math.abs(p.profit_eur ?? 0)), 1);
+
+  function renderTooltipContent({ active, payload, label }: { active?: boolean; payload?: Array<{ payload: Record<string, unknown> }>; label?: number }) {
+    if (!active || !payload || payload.length === 0) return null;
+
+    const point = payload[0].payload;
+    const newPrice = toNum(point.price_new as number | null | undefined);
+    const usedPrice = toNum(point.price_used as number | null | undefined);
+    const invested = toNum(point.invested_value as number | null | undefined);
+    const market = toNum(point.market_value as number | null | undefined);
+
+    const newBandMin = toNum(point.newBandMin as number | null | undefined);
+    const newBandMax = toNum(point.newBandMax as number | null | undefined);
+    const usedBandMin = toNum(point.usedBandMin as number | null | undefined);
+    const usedBandMax = toNum(point.usedBandMax as number | null | undefined);
+
+    const showSelected = Boolean(selectedProductId);
+    const isMainNew = selectedCondition === "SEALED";
+
+    const mainPrice = isMainNew ? newPrice : usedPrice;
+    const mainMin = isMainNew ? newBandMin : usedBandMin;
+    const mainMax = isMainNew ? newBandMax : usedBandMax;
+    const distToMax = mainPrice != null && mainMax != null ? Math.max(0, mainMax - mainPrice) : null;
+    const distToMin = mainPrice != null && mainMin != null ? Math.max(0, mainPrice - mainMin) : null;
+    const formatDelta = (value: number) =>
+      value.toLocaleString("es-ES", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    const deltaText =
+      distToMax != null && distToMin != null
+        ? ` (+${formatDelta(distToMax)}/-${formatDelta(distToMin)})`
+        : "";
+
+    return (
+      <div
+        style={{
+          backgroundColor: "#141416",
+          border: "1px solid #2A2A2D",
+          borderRadius: 8,
+          padding: "8px 10px",
+        }}
+      >
+        <div style={{ color: "#A1A1AA", fontSize: 12, marginBottom: 6 }}>
+          {formatDate(label ?? 0)}
+        </div>
+
+        {showSelected ? (
+          <>
+            {newPrice != null && (
+              <div style={{ color: "#F59E0B", fontSize: 12, marginBottom: 4 }}>
+                Nuevo : {formatCurrency(newPrice)}{isMainNew ? deltaText : ""}
+              </div>
+            )}
+            {usedPrice != null && (
+              <div style={{ color: "#3B82F6", fontSize: 12 }}>
+                Usado : {formatCurrency(usedPrice)}{!isMainNew ? deltaText : ""}
+              </div>
+            )}
+          </>
+        ) : (
+          <>
+            {invested != null && (
+              <div style={{ color: "#F59E0B", fontSize: 12, marginBottom: 4 }}>
+                Invertido : {formatCurrency(invested)}
+              </div>
+            )}
+            {market != null && (
+              <div style={{ color: "#3B82F6", fontSize: 12 }}>
+                Valor de mercado : {formatCurrency(market)}
+              </div>
+            )}
+          </>
+        )}
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col">
@@ -263,7 +441,7 @@ export default function PricesPage() {
                   </h3>
                   <p className="text-xs text-text-muted">
                     {selectedProductId
-                      ? `Guide type: sold · Línea destacada según estado (${conditionLabel(selectedCondition)})`
+                      ? `Guide type: sold · Línea destacada según estado (${conditionLabel(selectedCondition)}) · Banda sombreada = rango min/max`
                       : "Misma visualización que en dashboard: invertido y valor de mercado"}
                   </p>
                 </div>
@@ -277,6 +455,9 @@ export default function PricesPage() {
                         setSelectedProductId(null);
                         setSelectedProductName("");
                         setSelectedCondition(null);
+                        setSelectedPurchasePrice(null);
+                        setSelectedFallbackBandMin(null);
+                        setSelectedFallbackBandMax(null);
                         setSelectedHistory([]);
                       }}
                     >
@@ -292,7 +473,7 @@ export default function PricesPage() {
                 <p className="py-8 text-center text-sm text-text-muted">Sin histórico disponible para este producto en los últimos 6 meses.</p>
               ) : (
                 <ResponsiveContainer width="100%" height={280}>
-                  <LineChart
+                  <ComposedChart
                     data={selectedProductId ? visibleSelected : visibleGlobal}
                     margin={{ top: 5, right: 10, left: 10, bottom: 5 }}
                   >
@@ -308,26 +489,81 @@ export default function PricesPage() {
                       tickLine={false}
                     />
                     <YAxis
-                      domain={[0, yMax]}
+                      domain={[yMin, yMax]}
+                      allowDataOverflow
                       tickFormatter={(v) => `${v}€`}
                       tick={{ fill: "#71717A", fontSize: 11 }}
                       axisLine={false}
                       tickLine={false}
                     />
                     <Tooltip
-                      contentStyle={{
-                        backgroundColor: "#141416",
-                        border: "1px solid #2A2A2D",
-                        borderRadius: 8,
-                      }}
-                      labelStyle={{ color: "#A1A1AA", fontSize: 12 }}
-                      formatter={(value: number, name: string) => [formatCurrency(value), name]}
-                      labelFormatter={(label) => formatDate(label)}
+                      content={(props) => renderTooltipContent(props as { active?: boolean; payload?: Array<{ payload: Record<string, unknown> }>; label?: number })}
                     />
                     <Legend />
 
                     {selectedProductId ? (
                       <>
+                        {/* Límites min/max invisibles para banda de variabilidad (nuevo) */}
+                        <Line type="linear" dataKey="newBandMin" stroke="#F59E0B" strokeOpacity={0} dot={false} activeDot={false} legendType="none" connectNulls />
+                        <Line type="linear" dataKey="newBandMax" stroke="#F59E0B" strokeOpacity={0} dot={false} activeDot={false} legendType="none" connectNulls />
+                        {/* Límites min/max invisibles para banda de variabilidad (usado) */}
+                        <Line type="linear" dataKey="usedBandMin" stroke="#3B82F6" strokeOpacity={0} dot={false} activeDot={false} legendType="none" connectNulls />
+                        <Line type="linear" dataKey="usedBandMax" stroke="#3B82F6" strokeOpacity={0} dot={false} activeDot={false} legendType="none" connectNulls />
+
+                        <Area
+                          type="linear"
+                          dataKey="newBandMin"
+                          stackId="varianceNew"
+                          stroke="none"
+                          fillOpacity={0}
+                          connectNulls
+                          isAnimationActive={false}
+                          legendType="none"
+                        />
+                        <Area
+                          type="linear"
+                          dataKey="newBandSpan"
+                          stackId="varianceNew"
+                          stroke="none"
+                          fill="#F59E0B"
+                          fillOpacity={highlightNew ? 0.24 : 0.12}
+                          connectNulls
+                          legendType="none"
+                        />
+                        <Area
+                          type="linear"
+                          dataKey="usedBandMin"
+                          stackId="varianceUsed"
+                          stroke="none"
+                          fillOpacity={0}
+                          connectNulls
+                          isAnimationActive={false}
+                          legendType="none"
+                        />
+                        <Area
+                          type="linear"
+                          dataKey="usedBandSpan"
+                          stackId="varianceUsed"
+                          stroke="none"
+                          fill="#3B82F6"
+                          fillOpacity={highlightUsed ? 0.24 : 0.12}
+                          connectNulls
+                          legendType="none"
+                        />
+                        {selectedPurchasePrice !== null && (
+                          <ReferenceLine
+                            y={selectedPurchasePrice}
+                            stroke="#A1A1AA"
+                            strokeDasharray="4 4"
+                            ifOverflow="extendDomain"
+                            label={{
+                              value: `Compra ${formatCurrency(selectedPurchasePrice)}`,
+                              position: "insideBottomRight",
+                              fill: "#A1A1AA",
+                              fontSize: 11,
+                            }}
+                          />
+                        )}
                         <Line
                           type="monotone"
                           dataKey="price_new"
@@ -357,7 +593,7 @@ export default function PricesPage() {
                         <Line type="monotone" dataKey="market_value" name="Valor de mercado" stroke="#3B82F6" strokeWidth={2} dot={false} />
                       </>
                     )}
-                  </LineChart>
+                  </ComposedChart>
                 </ResponsiveContainer>
               )}
             </Card>
@@ -452,6 +688,18 @@ export default function PricesPage() {
           </div>
         )}
       </div>
+
+      {refreshingAll && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-[1px]">
+          <div className="rounded-xl border border-border bg-bg-card px-5 py-4 text-center shadow-xl">
+            <p className="text-sm font-medium text-text-primary">Actualizando precios…</p>
+            <RefreshCw className="mx-auto mt-3 h-12 w-12 animate-spin text-accent-lego" />
+            <p className="mt-3 text-xs text-text-muted">
+              {refreshStatus || "Sincronizando datos"} · {Math.round(refreshProgress)}%
+            </p>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

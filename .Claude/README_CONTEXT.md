@@ -46,6 +46,9 @@ Fecha de actualización: 2026-04-02 (refresh de precios en dos fases UI+BBDD+scr
 - Gráficas frontend (dashboard, precios y ficha de producto) con selector de rango temporal (`1m`, `3m`, `6m`, `all`) y valor por defecto en `6m`.
 - Gráfica de precios por producto renombrada en UI de "Histórico 6 meses" a "Histórico de precios".
 - Gráfica de histórico por producto (módulo precios) ahora muestra puntos visibles en líneas `Nuevo/Usado` para que meses aislados sin continuidad no desaparezcan visualmente.
+- Gráfica de histórico por producto: banda de variabilidad min/max ajustada para dibujarse como zona sombreada exacta entre límites (base=min, altura=max-min) con trazado lineal para evitar sobreoscilaciones.
+- Módulo de precios (histórico de producto): variabilidad rehacida por estado (`Nuevo` y `Usado`) con líneas min/max invisibles y sombreado entre límites de cada estado; la variabilidad no aparece en la leyenda.
+- Módulo de precios (histórico de producto): el eje Y incluye min/max de bandas para que la variabilidad completa quede dentro de la gráfica; tooltip simplificado a `Nuevo` y `Usado`, mostrando en la serie principal `(+distancia a max/-distancia a min)`.
 - Alertas muestran nombre de producto desde inventario (en vez de enseñar solo el ID cuando no viene expandido en respuesta API).
 - Ficha de producto: bloque "Crear alerta rápida" remaquetado en dos líneas (tipo de alerta arriba, umbral + botón abajo) para mejorar legibilidad y alineación responsive.
 - Script operativo de relanzado completo en `scripts/restart-dev.ps1`:

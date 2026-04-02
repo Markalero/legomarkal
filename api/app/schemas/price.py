@@ -112,6 +112,10 @@ class ProductPriceHistoryPoint(BaseModel):
     date: datetime
     price_new: Optional[Decimal]
     price_used: Optional[Decimal]
+    min_price_new: Optional[Decimal] = None
+    max_price_new: Optional[Decimal] = None
+    min_price_used: Optional[Decimal] = None
+    max_price_used: Optional[Decimal] = None
 
 
 class ProductPriceHistoryOut(BaseModel):

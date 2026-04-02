@@ -132,10 +132,10 @@ class PriceService:
     ) -> Optional[Decimal]:
         """Selecciona el precio de mercado real según condición del producto."""
         if condition == "SEALED":
-            return price_new or price_used
+            return price_new
         if condition in ("OPEN_COMPLETE", "OPEN_INCOMPLETE"):
-            return price_used or price_new
-        return price_used or price_new
+            return price_used
+        return price_used
 
     def get_product_history_trend(
         self,
@@ -166,12 +166,32 @@ class PriceService:
 
         grouped_new: dict[date, list[Decimal]] = defaultdict(list)
         grouped_used: dict[date, list[Decimal]] = defaultdict(list)
+        grouped_min_new: dict[date, list[Decimal]] = defaultdict(list)
+        grouped_max_new: dict[date, list[Decimal]] = defaultdict(list)
+        grouped_min_used: dict[date, list[Decimal]] = defaultdict(list)
+        grouped_max_used: dict[date, list[Decimal]] = defaultdict(list)
         for row in rows:
             key = row.fetched_at.date()
             if row.price_new is not None:
                 grouped_new[key].append(Decimal(str(row.price_new)))
+            if row.min_price_new is not None:
+                grouped_min_new[key].append(Decimal(str(row.min_price_new)))
+            elif row.price_new is not None:
+                grouped_min_new[key].append(Decimal(str(row.price_new)))
+            if row.max_price_new is not None:
+                grouped_max_new[key].append(Decimal(str(row.max_price_new)))
+            elif row.price_new is not None:
+                grouped_max_new[key].append(Decimal(str(row.price_new)))
             if row.price_used is not None:
                 grouped_used[key].append(Decimal(str(row.price_used)))
+            if row.min_price_used is not None:
+                grouped_min_used[key].append(Decimal(str(row.min_price_used)))
+            elif row.price_used is not None:
+                grouped_min_used[key].append(Decimal(str(row.price_used)))
+            if row.max_price_used is not None:
+                grouped_max_used[key].append(Decimal(str(row.max_price_used)))
+            elif row.price_used is not None:
+                grouped_max_used[key].append(Decimal(str(row.price_used)))
 
         all_dates = sorted(set(grouped_new.keys()) | set(grouped_used.keys()))
         points: list[dict] = []
@@ -180,11 +200,19 @@ class PriceService:
             used_values = grouped_used.get(day, [])
             avg_new = (sum(new_values) / Decimal(len(new_values))).quantize(Decimal("0.01")) if new_values else None
             avg_used = (sum(used_values) / Decimal(len(used_values))).quantize(Decimal("0.01")) if used_values else None
+            min_new_values = grouped_min_new.get(day, [])
+            max_new_values = grouped_max_new.get(day, [])
+            min_used_values = grouped_min_used.get(day, [])
+            max_used_values = grouped_max_used.get(day, [])
             points.append(
                 {
                     "date": datetime(day.year, day.month, day.day, tzinfo=timezone.utc),
                     "price_new": avg_new,
                     "price_used": avg_used,
+                    "min_price_new": min(min_new_values).quantize(Decimal("0.01")) if min_new_values else avg_new,
+                    "max_price_new": max(max_new_values).quantize(Decimal("0.01")) if max_new_values else avg_new,
+                    "min_price_used": min(min_used_values).quantize(Decimal("0.01")) if min_used_values else avg_used,
+                    "max_price_used": max(max_used_values).quantize(Decimal("0.01")) if max_used_values else avg_used,
                 }
             )
 
@@ -643,10 +671,10 @@ class DashboardService:
         price_used: Optional[Decimal],
     ) -> Optional[Decimal]:
         if condition == "SEALED":
-            return price_new or price_used
+            return price_new
         if condition in ("OPEN_COMPLETE", "OPEN_INCOMPLETE"):
-            return price_used or price_new
-        return price_used or price_new
+            return price_used
+        return price_used
 
     def _latest_price_for_set(self, db: Session, set_number: Optional[str]) -> Optional[MarketPrice]:
         if not set_number:

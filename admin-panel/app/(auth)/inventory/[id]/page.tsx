@@ -126,7 +126,28 @@ export default function ProductDetailPage({ params }: Props) {
   }
 
   const latestPrice = product.latest_market_price ?? null;
-  const marketPrice = latestPrice?.price_new ?? latestPrice?.price_used ?? null;
+
+  // Preferir el último precio no nulo del `priceHistory` que coincida con la
+  // condición del producto (SEALED vs OPEN). Si no hay ninguno, caer atrás al
+  // `latest_market_price` almacenado en `product`.
+  function findLastPriceFromHistory() {
+    if (!priceHistory || !priceHistory.points || priceHistory.points.length === 0) return null;
+    const cond = product.condition ?? priceHistory.condition ?? null;
+    for (let i = priceHistory.points.length - 1; i >= 0; i--) {
+      const p = priceHistory.points[i];
+      const v = cond === "SEALED" ? p.price_new ?? null : p.price_used ?? null;
+      if (v != null) return { price: v, date: p.date };
+    }
+    return null;
+  }
+
+  const phLast = findLastPriceFromHistory();
+  const latestByCondition = product.condition === "SEALED"
+    ? (latestPrice?.price_new ?? null)
+    : (latestPrice?.price_used ?? null);
+  const marketPrice = phLast?.price ?? latestByCondition;
+  const sourceLabel = phLast ? "Historial" : latestPrice?.source ?? null;
+  const sourceDate = phLast ? phLast.date : latestPrice?.fetched_at ?? null;
   const isSold = product.availability === "sold";
   const marginPct = isSold
     ? calcMarginPct(product.purchase_price, product.sold_price)
@@ -290,7 +311,7 @@ export default function ProductDetailPage({ params }: Props) {
                         {formatCurrency(marketPrice)}
                       </p>
                       <p className="mt-1 text-xs text-text-muted">
-                        Fuente: {latestPrice.source} — {formatDate(latestPrice.fetched_at)}
+                        Fuente: {sourceLabel} — {formatDate(sourceDate)}
                       </p>
                     </div>
                     {marginPct !== null && (
