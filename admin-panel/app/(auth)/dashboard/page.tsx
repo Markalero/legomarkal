@@ -9,7 +9,7 @@ import { AlertFeed } from "@/components/dashboard/AlertFeed";
 import { Card, CardHeader, CardTitle } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { RefreshPricesButton } from "@/components/ui/RefreshPricesButton";
-import { dashboardApi, alertsApi } from "@/lib/api-client";
+import { dashboardApi, alertsApi, productsApi } from "@/lib/api-client";
 import { formatCurrency, formatPct } from "@/lib/utils";
 import type { DashboardSummary, TopMarginProduct, PriceTrendPoint, PriceAlert, RealProfitSummary } from "@/types";
 
@@ -21,6 +21,8 @@ export default function DashboardPage() {
   const [realProfits, setRealProfits] = useState<RealProfitSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [scraping, setScraping] = useState(false);
+  const [refreshProgress, setRefreshProgress] = useState(0);
+  const [refreshStatus, setRefreshStatus] = useState<string>("");
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
@@ -48,13 +50,65 @@ export default function DashboardPage() {
 
   useEffect(() => { load(); }, [load]);
 
+  function startPredictiveProgress(totalModels: number): () => void {
+    const ceiling = 82;
+    const expectedDurationMs = Math.max(6000, totalModels * 2200);
+    const startTs = Date.now();
+
+    const timer = window.setInterval(() => {
+      const elapsed = Date.now() - startTs;
+      const ratio = Math.min(1, elapsed / expectedDurationMs);
+      const eased = 1 - Math.pow(1 - ratio, 2);
+      const predicted = Math.round(8 + (ceiling - 8) * eased);
+      setRefreshProgress((prev) => Math.max(prev, predicted));
+    }, 300);
+
+    return () => window.clearInterval(timer);
+  }
+
   async function handleTriggerScraper() {
     setScraping(true);
+    setRefreshProgress(8);
+    setRefreshStatus("Preparando sincronización");
+
+    let stopPredictor: (() => void) | null = null;
     try {
-      await dashboardApi.triggerScraper();
+      const totalModels = (await productsApi.list({ page: 1, size: 1 })).total || 1;
+      const estimatedOps = totalModels * 2 + 4;
+
+      setRefreshStatus(`Procesando ~${estimatedOps} operaciones (${totalModels} modelos)`);
+
+      // 1) Refresco rápido de UI con lo ya persistido en BBDD.
       await load();
+      setRefreshProgress(18);
+      setRefreshStatus("Sincronizando precios de mercado");
+
+      stopPredictor = startPredictiveProgress(totalModels);
+
+      // 2) Refresco completo de precios y verificación de cobertura diaria.
+      const execution = await dashboardApi.refreshAllPricesCompat();
+      if (execution.mode === "background") {
+        // En backend legado, el scraping corre en segundo plano.
+        setRefreshProgress(60);
+        setRefreshStatus("Esperando finalización del refresco");
+        await new Promise((resolve) => setTimeout(resolve, 2500));
+      }
+
+      stopPredictor?.();
+      stopPredictor = null;
+
+      setRefreshProgress(88);
+      setRefreshStatus("Recalculando cartera diaria completa");
+      // 3) Segunda actualización para reflejar datos recién scrapeados.
+      await load();
+      setRefreshProgress(100);
+      setRefreshStatus("Completado");
+      await new Promise((resolve) => setTimeout(resolve, 450));
     } finally {
+      stopPredictor?.();
       setScraping(false);
+      setRefreshProgress(0);
+      setRefreshStatus("");
     }
   }
 
@@ -64,17 +118,16 @@ export default function DashboardPage() {
         title="Dashboard"
         description="Resumen de inventario y mercado"
         actions={
-          <RefreshPricesButton loading={scraping} onClick={handleTriggerScraper} />
+          <RefreshPricesButton
+            loading={scraping}
+            onClick={handleTriggerScraper}
+            progress={refreshProgress}
+            statusText={refreshStatus}
+          />
         }
       />
 
       <div className="flex-1 space-y-6 p-6">
-        {loading && (
-          <div className="rounded-lg border border-accent-lego/30 bg-accent-lego/10 px-4 py-3 text-sm text-accent-lego">
-            Cargando métricas y tendencias del dashboard…
-          </div>
-        )}
-
         {error && (
           <div className="rounded-lg border border-status-error/30 bg-status-error/10 px-4 py-3 text-sm text-status-error">
             {error}

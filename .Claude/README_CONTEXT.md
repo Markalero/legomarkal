@@ -1,6 +1,6 @@
 # README_CONTEXT
 
-Fecha de actualización: 2026-04-01 (fix validación BrickLink en alta rápida + parser monetario BrickLink con dataset EUR/USD en EUR, ignorando RON/ROL)
+Fecha de actualización: 2026-04-02 (refresh de precios en dos fases UI+BBDD+scraper forzado y cobertura diaria por hora España)
 
 ---
 
@@ -30,7 +30,8 @@ Fecha de actualización: 2026-04-01 (fix validación BrickLink en alta rápida +
 - `market_prices` ampliada con rangos por estado y nomenclatura explícita: `min_price_new/max_price_new` (nuevo) y `min_price_used/max_price_used` (usado), para no mezclar métricas de condiciones distintas.
 - Limpieza operativa aplicada tras migración de rangos: vaciado de `market_prices` y `portfolio_daily_snapshots` para regenerar histórico consistente con el nuevo esquema.
 - API de precios ampliada con histórico por producto: `GET /market-prices/{product_id}/trend?months=6&guide_type=sold`.
-- Historial de precios con backfill mensual automático cuando faltan meses desde la fecha de compra.
+- Históricos mensuales por producto ahora se rellenan con datos reales del Price Guide de BrickLink (meses disponibles), sin interpolación/siembra artificial; si falta un mes, se omite.
+- Historial de precios sin backfill sintético: solo snapshots reales guardados desde scraper/importación.
 - Cálculo de valor de mercado ajustado por estado: `SEALED => price_new`, `OPEN_COMPLETE/OPEN_INCOMPLETE => price_used`.
 - Inventario simplificado: sin categorías ni ubicaciones en UI/API/BBDD.
 - UX de imágenes mejorada: confirmación al borrar y visor fullscreen con navegación (flechas, teclado y miniaturas).
@@ -42,11 +43,15 @@ Fecha de actualización: 2026-04-01 (fix validación BrickLink en alta rápida +
 - Gráfica "Evolución: dinero invertido vs valor de mercado" ajustada con dominio dinámico en eje Y para mantener el máximo dentro del área visible.
 - Navegación lateral con feedback visual de carga al cambiar de sección.
 - Sección de precios rediseñada visualmente (cabecera, filas alternas, realce de beneficio) y botón global "Actualizar precios" en la parte superior derecha.
+- Gráficas frontend (dashboard, precios y ficha de producto) con selector de rango temporal (`1m`, `3m`, `6m`, `all`) y valor por defecto en `6m`.
+- Gráfica de precios por producto renombrada en UI de "Histórico 6 meses" a "Histórico de precios".
+- Gráfica de histórico por producto (módulo precios) ahora muestra puntos visibles en líneas `Nuevo/Usado` para que meses aislados sin continuidad no desaparezcan visualmente.
 - Alertas muestran nombre de producto desde inventario (en vez de enseñar solo el ID cuando no viene expandido en respuesta API).
+- Ficha de producto: bloque "Crear alerta rápida" remaquetado en dos líneas (tipo de alerta arriba, umbral + botón abajo) para mejorar legibilidad y alineación responsive.
 - Script operativo de relanzado completo en `scripts/restart-dev.ps1`:
 	- libera puertos historicos (3000/8000/8010/8011/8020),
 	- limpia `.next`,
-	- levanta backend en `8011` y frontend en `3000` apuntando a `8011`,
+	- levanta backend en `8011` con `uvicorn --reload` y frontend en `3000` apuntando a `8011`,
 	- valida `GET /health` y `GET /dashboard`.
 	- probado 3 ejecuciones consecutivas con `health=200` y `dashboard=200` en todas.
 - Alta rápida endurecida en backend/frontend:
@@ -65,12 +70,22 @@ Fecha de actualización: 2026-04-01 (fix validación BrickLink en alta rápida +
 	- `api/scripts/seed_example_data.py`: puebla datos de ejemplo y genera histórico autoajustado con último punto en **ayer** (nunca en hoy).
 - Consistencia UX en acciones de refresco de precios:
 	- nuevo componente reutilizable `admin-panel/components/ui/RefreshPricesButton.tsx` aplicado en dashboard, precios y ficha de producto.
+	- botón global "Actualizar precios" ahora ejecuta flujo en dos pasos en dashboard y precios: refresco inmediato desde BBDD, scraping síncrono completo y refresco final de UI.
+	- backend añade endpoint `POST /scraper/refresh-all` con resumen (`total_products`, `missing_after_first`, `missing_after_second`, `spain_today`).
+	- runner de scraping añade segunda pasada automática para productos sin snapshot del día actual (comparación por fecha local España).
+	- refresco global ahora sincroniza también `portfolio_daily_snapshots`: upsert diario (fecha España) al finalizar `scrape_all_products` y `refresh_all_products_prices_for_today`.
+	- `refresh-all` ahora reconstruye completo `portfolio_daily_snapshots` desde `market_prices` (no solo hoy), garantizando consistencia histórica tras actualizar precios.
 	- texto e iconografía unificados en la acción "Actualizar precios".
+	- botón "Actualizar precios" (dashboard y precios) muestra progreso por fases con barra y porcentaje durante la operación.
+	- progreso de refresco mejorado con predicción dinámica basada en número de modelos (`~ operaciones`) para una barra más estable durante procesos largos.
 - Feedback de navegación en inventario:
 	- al seleccionar una fila de producto se muestra estado "Abriendo…" con spinner en la misma fila hasta completar navegación.
+	- tabla de inventario ampliada con columna **Cantidad** visible junto a condición y compra.
 - Persistencia de precios ajustada en backend:
 	- `market_prices` guarda **una sola fila por producto y día** (upsert diario en `price_service.save_price`).
 	- si ya existe fila del día, se sobreescribe y se eliminan duplicados del mismo día.
+	- para sets repetidos en inventario, `market_prices` se consolida por `set_number` usando un `product_id` canónico (evita duplicados por copias del mismo set).
+	- lecturas de historial/tendencias y `latest_market_price` consultan por `set_number` compartido, no por id individual.
 	- `currency` se normaliza siempre a `EUR` al guardar.
 	- limpieza BD aplicada: deduplicación histórica por `product_id + fecha`, conversión masiva de moneda a `EUR`, borrado de registros de hoy en `market_prices` y `portfolio_daily_snapshots`.
 - **Frontend Next.js 14 App Router completamente implementado (V1).**
@@ -115,6 +130,7 @@ LegoMarkal/
 │  │  │  ├─ Input.tsx            # Input con label, error y adorno izquierdo
 │  │  │  ├─ Badge.tsx            # Badges de estado: success, warning, error, info, neutral
 │  │  │  ├─ Card.tsx             # Contenedor card con CardHeader y CardTitle
+│  │  │  ├─ ChartRangeSelector.tsx # Selector de rango temporal para gráficas (1m/3m/6m/all)
 │  │  │  └─ Modal.tsx            # Modal con overlay, cierre Escape/click
 │  │  ├─ layout/
 │  │  │  ├─ Sidebar.tsx          # Navegación principal + logout
@@ -246,18 +262,20 @@ Estado actual: **implementación V1 completa en Next.js 14 App Router**.
 - (auth)/dashboard/page.tsx: KPIs (4 tarjetas), gráfico Recharts de inversión vs mercado, top 5 margen, feed de alertas, botón trigger scraper.
 - (auth)/inventory/page.tsx: Tabla paginada con FilterBar (búsqueda, tema, condición, estado), exportación CSV, importación masiva y configuración de inventario.
 - (auth)/inventory/new/page.tsx: Alta rápida por código LEGO + estado/compra; metadatos resueltos desde BrickLink.
-- (auth)/inventory/[id]/page.tsx: Ficha completa — galería imágenes, datos, historial precios (Recharts), alertas del producto, botones editar/eliminar/scrape.
+- (auth)/inventory/[id]/page.tsx: Ficha completa — galería imágenes, datos, historial precios (Recharts con filtro temporal), alertas del producto (formulario en dos filas), botones editar/eliminar/scrape.
 - (auth)/inventory/[id]/edit/page.tsx: Formulario de edición con valores precargados.
-- (auth)/prices/page.tsx: Vista tabular con gráfica global (igual dashboard) y cambio a histórico lineal 6 meses al seleccionar un producto.
+- (auth)/prices/page.tsx: Vista tabular con gráfica global (igual dashboard) y cambio a histórico por producto seleccionado; ambas vistas con filtro temporal `1m/3m/6m/all` (default `6m`).
 - (auth)/alerts/page.tsx: Listado, creación rápida y eliminación de alertas activas.
 
 ### admin-panel/components/
-Ver árbol detallado en sección 1. Componentes UI base (Button, Input, Badge, Card, Modal), layout (Sidebar, Header), dashboard (KpiCard, PriceChart, AlertFeed), inventory (InventoryTable, FilterBar, BulkImport), product (ProductForm, PriceHistory, ImageUpload).
+Ver árbol detallado en sección 1. Componentes UI base (Button, Input, Badge, Card, ChartRangeSelector, Modal), layout (Sidebar, Header), dashboard (KpiCard, PriceChart, AlertFeed), inventory (InventoryTable, FilterBar, BulkImport), product (ProductForm, PriceHistory, ImageUpload).
 
 - Nota UX reciente:
 	- UI: `RefreshPricesButton.tsx` centraliza estilo/comportamiento del CTA de actualización de precios.
+	- UI: `ChartRangeSelector.tsx` unifica el filtro temporal de gráficas (`1m`, `3m`, `6m`, `all`) en dashboard, módulo de precios y ficha de producto.
 	- InventoryTable integra `SellModal` para capturar precio/fecha real de venta al marcar "sold". Filas vendidas muestran `sold_price` con badge "venta" y `opacity-60`. Spinner de navegación por fila eliminado; la navegación usa `router.push` directo.
 	- `handleToggleAvailability` en `inventory/page.tsx` actualizado para propagar `sold_price` y `sold_date` al endpoint de edición.
+	- Ficha de producto: formulario "Crear alerta rápida" ajustado para separar selector de tipo y acción de alta en dos filas, mejorando el encaje visual en desktop y móvil.
 
 ### admin-panel/lib/
 - api-client.ts: Cliente HTTP con Bearer token automático, gestión de 401 y redirección a login.

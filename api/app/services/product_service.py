@@ -61,7 +61,11 @@ class ProductService:
         for p in items:
             latest = (
                 db.query(MarketPrice)
-                .filter(MarketPrice.product_id == p.id)
+                .join(Product, MarketPrice.product_id == Product.id)
+                .filter(
+                    Product.set_number == p.set_number,
+                    Product.deleted_at.is_(None),
+                )
                 .order_by(MarketPrice.fetched_at.desc())
                 .first()
             )
@@ -82,7 +86,11 @@ class ProductService:
 
         latest = (
             db.query(MarketPrice)
-            .filter(MarketPrice.product_id == product.id)
+            .join(Product, MarketPrice.product_id == Product.id)
+            .filter(
+                Product.set_number == product.set_number,
+                Product.deleted_at.is_(None),
+            )
             .order_by(MarketPrice.fetched_at.desc())
             .first()
         )
@@ -152,7 +160,7 @@ class ProductService:
         return product
 
     def _save_price_history_snapshots(self, db: Session, product_id: UUID, live_price) -> None:
-        """Guarda histórico de 6 meses (fin de mes) y snapshot actual."""
+        """Guarda snapshot actual y, si existe, histórico mensual real."""
         from app.services.price_service import price_service
 
         payload = {
@@ -166,13 +174,14 @@ class ProductService:
             "fetched_at": datetime.now(timezone.utc),
         }
 
-        price_service.seed_last_six_months_history(
-            db,
-            product_id=product_id,
-            source="bricklink",
-            data=payload,
-            months=6,
-        )
+        if getattr(live_price, "monthly_history", None):
+            price_service.save_monthly_history_points(
+                db,
+                product_id=product_id,
+                source="bricklink",
+                points=live_price.monthly_history,
+            )
+
         price_service.save_price(db, product_id, "bricklink", payload)
 
     def enrich_market_history_if_possible(self, db: Session, product: Product) -> None:

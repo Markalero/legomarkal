@@ -61,7 +61,7 @@ export default function ProductDetailPage({ params }: Props) {
   async function handleScrape() {
     setScraping(true);
     try {
-      await pricesApi.scrape(params.id);
+      await pricesApi.scrape(params.id, true);
       await load();
     } finally {
       setScraping(false);

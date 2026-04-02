@@ -93,7 +93,7 @@ Get-Content .env | ForEach-Object {
         Set-Item -Path Env:`$name -Value `$value
     }
 }
-& '$pythonExe' -m uvicorn app.main:app --host 127.0.0.1 --port $BackendPort --log-level warning
+& '$pythonExe' -m uvicorn app.main:app --host 127.0.0.1 --port $BackendPort --log-level warning --reload --reload-dir '$apiDir\app'
 "@
 Set-Content -Path $backendTempScript -Value $backendCmd -Encoding UTF8
 

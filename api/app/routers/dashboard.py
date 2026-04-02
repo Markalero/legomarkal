@@ -64,3 +64,15 @@ def trigger_scraper(background_tasks: BackgroundTasks, _: str = Depends(get_curr
     from app.scraper.runner import scrape_all_products
     background_tasks.add_task(scrape_all_products)
     return {"message": "Scraper completo iniciado en background"}
+
+
+@scraper_router.post("/refresh-all")
+def refresh_all_scraper(_: str = Depends(get_current_user)):
+    """Ejecuta refresco completo síncrono y devuelve resumen de cobertura diaria."""
+    from app.scraper.runner import refresh_all_products_prices_for_today
+
+    result = refresh_all_products_prices_for_today()
+    return {
+        "message": "Refresco completo de precios finalizado",
+        **result,
+    }

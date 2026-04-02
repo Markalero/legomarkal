@@ -3,7 +3,7 @@ import asyncio
 import logging
 import re
 from abc import ABC, abstractmethod
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from decimal import Decimal
 from typing import Optional
 
@@ -24,6 +24,8 @@ class PriceData:
     min_price_used: Optional[Decimal] = None
     max_price_used: Optional[Decimal] = None
     currency: str = "EUR"
+    # Puntos mensuales reales del Price Guide (si la fuente los expone).
+    monthly_history: list[dict] = field(default_factory=list)
 
 
 class BaseScraper(ABC):

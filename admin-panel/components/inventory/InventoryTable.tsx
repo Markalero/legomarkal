@@ -95,6 +95,7 @@ export function InventoryTable({ data, onPageChange, onToggleAvailability }: Inv
                 <th className="px-4 py-3">Nombre</th>
                 <th className="px-4 py-3">Tema</th>
                 <th className="px-4 py-3">Condición</th>
+                <th className="px-4 py-3 text-right">Cantidad</th>
                 <th className="px-4 py-3 text-right">Compra</th>
                 <th className="px-4 py-3 text-right">Mercado</th>
                 <th className="px-4 py-3 text-right">Margen</th>
@@ -106,7 +107,7 @@ export function InventoryTable({ data, onPageChange, onToggleAvailability }: Inv
               {items.length === 0 && (
                 <tr>
                   <td
-                    colSpan={10}
+                    colSpan={11}
                     className="px-4 py-12 text-center text-text-muted"
                   >
                     Sin productos que coincidan con los filtros.
@@ -157,6 +158,9 @@ export function InventoryTable({ data, onPageChange, onToggleAvailability }: Inv
                       <Badge variant="neutral">
                         {conditionLabel(product.condition)}
                       </Badge>
+                    </td>
+                    <td className="px-4 py-3 text-right text-text-secondary">
+                      {product.quantity ?? 1}
                     </td>
                     <td className="px-4 py-3 text-right text-text-secondary">
                       {formatCurrency(product.purchase_price)}

@@ -179,4 +179,28 @@ export const dashboardApi = {
 
   triggerScraper: () =>
     request<{ message: string }>("/scraper/trigger", { method: "POST" }),
+
+  refreshAllPrices: () =>
+    request<{
+      message: string;
+      total_products: number;
+      missing_after_first: number;
+      missing_after_second: number;
+      spain_today: string;
+    }>("/scraper/refresh-all", { method: "POST" }),
+
+  refreshAllPricesCompat: async () => {
+    try {
+      const result = await dashboardApi.refreshAllPrices();
+      return { mode: "sync" as const, result };
+    } catch (error) {
+      // Compatibilidad con backend antiguo que aún no expone /scraper/refresh-all.
+      const message = error instanceof Error ? error.message : "";
+      if (/Not Found|Error 404/i.test(message)) {
+        await dashboardApi.triggerScraper();
+        return { mode: "background" as const, result: null };
+      }
+      throw error;
+    }
+  },
 };

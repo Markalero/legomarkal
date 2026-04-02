@@ -5,6 +5,7 @@ from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
 from typing import List, Optional
 from uuid import UUID
+from zoneinfo import ZoneInfo
 
 from sqlalchemy import Date as SADate, cast, func
 from sqlalchemy.orm import Session
@@ -23,6 +24,46 @@ from app.schemas.price import (
 
 class PriceService:
     """Consultas y escritura de snapshots de precios de mercado."""
+
+    SPAIN_TZ = ZoneInfo("Europe/Madrid")
+
+    def _now_spain(self) -> datetime:
+        """Fecha/hora actual en zona horaria de España peninsular."""
+        return datetime.now(self.SPAIN_TZ)
+
+    def _get_set_number_for_product(self, db: Session, product_id: UUID) -> Optional[str]:
+        product = (
+            db.query(Product)
+            .filter(Product.id == product_id, Product.deleted_at.is_(None))
+            .first()
+        )
+        if not product:
+            return None
+        return (product.set_number or "").strip() or None
+
+    def _get_related_product_ids_by_set(self, db: Session, set_number: Optional[str]) -> list[UUID]:
+        if not set_number:
+            return []
+        rows = (
+            db.query(Product.id)
+            .filter(Product.set_number == set_number, Product.deleted_at.is_(None))
+            .all()
+        )
+        return [row.id for row in rows]
+
+    def _resolve_storage_product_id(self, db: Session, product_id: UUID) -> UUID:
+        """Elige un product_id canónico por set_number para persistir una sola serie."""
+        set_number = self._get_set_number_for_product(db, product_id)
+        if not set_number:
+            return product_id
+
+        canonical = (
+            db.query(Product)
+            .filter(Product.set_number == set_number, Product.deleted_at.is_(None))
+            .order_by(Product.created_at.asc())
+            .first()
+        )
+        return canonical.id if canonical else product_id
 
     def _interpolate_month_price(
         self,
@@ -62,14 +103,26 @@ class PriceService:
         return value.quantize(Decimal("0.01"))
 
     def get_price_history(self, db: Session, product_id: UUID) -> List[MarketPrice]:
-        self._backfill_monthly_history(db, product_id)
-        return (
+        set_number = self._get_set_number_for_product(db, product_id)
+        related_ids = self._get_related_product_ids_by_set(db, set_number)
+        if not related_ids:
+            related_ids = [product_id]
+
+        rows = (
             db.query(MarketPrice)
-            .filter(MarketPrice.product_id == product_id)
+            .filter(MarketPrice.product_id.in_(related_ids))
             .order_by(MarketPrice.fetched_at.desc())
-            .limit(100)
             .all()
         )
+
+        # Para API de historial devolvemos una fila por fecha (la más reciente de ese día).
+        by_day: dict[date, MarketPrice] = {}
+        for row in rows:
+            day = row.fetched_at.date()
+            by_day.setdefault(day, row)
+            if len(by_day) >= 100:
+                break
+        return list(by_day.values())
 
     def select_price_by_condition(
         self,
@@ -95,11 +148,15 @@ class PriceService:
         if not product:
             return None, []
 
+        related_ids = self._get_related_product_ids_by_set(db, product.set_number)
+        if not related_ids:
+            related_ids = [product_id]
+
         since = datetime.now(timezone.utc) - timedelta(days=max(1, months) * 31)
         rows = (
             db.query(MarketPrice)
             .filter(
-                MarketPrice.product_id == product_id,
+                MarketPrice.product_id.in_(related_ids),
                 MarketPrice.source == "bricklink",
                 MarketPrice.fetched_at >= since,
             )
@@ -207,17 +264,22 @@ class PriceService:
         Si ya existe un registro para hoy, se sobreescribe con los nuevos datos.
         Además, se normaliza siempre la moneda a EUR.
         """
-        today_utc = datetime.now(timezone.utc).date()
-        now_utc = datetime.now(timezone.utc)
+        now_spain = self._now_spain()
+        today_spain = now_spain.date()
+        # La columna es TIMESTAMP sin timezone; persistimos hora local naive para que
+        # el cast a DATE en BD respete el calendario español sin desplazamientos UTC.
+        now_spain_naive = now_spain.replace(tzinfo=None)
 
         # Moneda forzada a EUR para todo almacenamiento.
         normalized_data = {**data, "currency": "EUR"}
+        storage_product_id = self._resolve_storage_product_id(db, product_id)
 
         existing_today = (
             db.query(MarketPrice)
             .filter(
-                MarketPrice.product_id == product_id,
-                cast(MarketPrice.fetched_at, SADate) == today_utc,
+                MarketPrice.product_id == storage_product_id,
+                MarketPrice.source == source,
+                cast(MarketPrice.fetched_at, SADate) == today_spain,
             )
             .order_by(MarketPrice.fetched_at.desc())
             .all()
@@ -234,13 +296,13 @@ class PriceService:
             price.min_price_used = normalized_data.get("min_price_used")
             price.max_price_used = normalized_data.get("max_price_used")
             price.currency = "EUR"
-            price.fetched_at = now_utc
+            price.fetched_at = now_spain_naive
 
             for duplicate in existing_today[1:]:
                 db.delete(duplicate)
         else:
             price = MarketPrice(
-                product_id=product_id,
+                product_id=storage_product_id,
                 source=source,
                 price_new=normalized_data.get("price_new"),
                 price_used=normalized_data.get("price_used"),
@@ -249,13 +311,121 @@ class PriceService:
                 min_price_used=normalized_data.get("min_price_used"),
                 max_price_used=normalized_data.get("max_price_used"),
                 currency="EUR",
-                fetched_at=now_utc,
+                fetched_at=now_spain_naive,
             )
             db.add(price)
 
         db.commit()
         db.refresh(price)
         return price
+
+    def save_monthly_history_points(
+        self,
+        db: Session,
+        product_id: UUID,
+        source: str,
+        points: list[dict],
+        prune_missing_months: bool = True,
+    ) -> int:
+        """Persiste histórico mensual real sin interpolaciones.
+
+        Se hace upsert por producto+fuente+fecha (día), manteniendo un único
+        snapshot por mes cuando la fuente proporciona ese punto.
+        """
+        if not points:
+            return 0
+
+        storage_product_id = self._resolve_storage_product_id(db, product_id)
+
+        normalized_points: list[dict] = []
+        keep_dates: set[date] = set()
+        for point in points:
+            fetched_at = point.get("fetched_at")
+            if not isinstance(fetched_at, datetime):
+                continue
+            normalized_points.append(point)
+            keep_dates.add(fetched_at.date())
+
+        if not normalized_points:
+            return 0
+
+        if prune_missing_months:
+            today_spain = self._now_spain().date()
+            stale_rows = (
+                db.query(MarketPrice)
+                .filter(
+                    MarketPrice.product_id == storage_product_id,
+                    MarketPrice.source == source,
+                    cast(MarketPrice.fetched_at, SADate) < today_spain,
+                )
+                .all()
+            )
+            for row in stale_rows:
+                row_date = row.fetched_at.date() if isinstance(row.fetched_at, datetime) else None
+                if row_date not in keep_dates:
+                    db.delete(row)
+
+        saved = 0
+        for point in normalized_points:
+            fetched_at = point.get("fetched_at")
+
+            day = fetched_at.date()
+            existing = (
+                db.query(MarketPrice)
+                .filter(
+                    MarketPrice.product_id == storage_product_id,
+                    MarketPrice.source == source,
+                    cast(MarketPrice.fetched_at, SADate) == day,
+                )
+                .order_by(MarketPrice.fetched_at.desc())
+                .all()
+            )
+
+            payload = {
+                "price_new": point.get("price_new"),
+                "price_used": point.get("price_used"),
+                "min_price_new": point.get("min_price_new"),
+                "max_price_new": point.get("max_price_new"),
+                "min_price_used": point.get("min_price_used"),
+                "max_price_used": point.get("max_price_used"),
+                "currency": "EUR",
+            }
+
+            if existing:
+                row = existing[0]
+                row.price_new = payload["price_new"]
+                row.price_used = payload["price_used"]
+                row.min_price_new = payload["min_price_new"]
+                row.max_price_new = payload["max_price_new"]
+                row.min_price_used = payload["min_price_used"]
+                row.max_price_used = payload["max_price_used"]
+                row.currency = "EUR"
+                row.fetched_at = fetched_at
+
+                for duplicate in existing[1:]:
+                    db.delete(duplicate)
+            else:
+                db.add(
+                    MarketPrice(
+                        product_id=storage_product_id,
+                        source=source,
+                        price_new=payload["price_new"],
+                        price_used=payload["price_used"],
+                        min_price_new=payload["min_price_new"],
+                        max_price_new=payload["max_price_new"],
+                        min_price_used=payload["min_price_used"],
+                        max_price_used=payload["max_price_used"],
+                        currency="EUR",
+                        fetched_at=fetched_at,
+                    )
+                )
+
+            saved += 1
+
+        if saved > 0:
+            db.commit()
+
+        return saved
 
     def seed_last_six_months_history(
         self,
@@ -350,18 +520,14 @@ class PriceService:
         db.commit()
 
     def get_latest_price_by_set_number(self, db: Session, set_number: str) -> Optional[MarketPrice]:
-        product = (
-            db.query(Product)
-            .filter(Product.set_number == set_number, Product.deleted_at.is_(None))
-            .order_by(Product.created_at.desc())
-            .first()
-        )
-        if not product:
-            return None
-
         return (
             db.query(MarketPrice)
-            .filter(MarketPrice.product_id == product.id, MarketPrice.source == "bricklink")
+            .join(Product, MarketPrice.product_id == Product.id)
+            .filter(
+                Product.set_number == set_number,
+                Product.deleted_at.is_(None),
+                MarketPrice.source == "bricklink",
+            )
             .order_by(MarketPrice.fetched_at.desc())
             .first()
         )
@@ -400,17 +566,28 @@ class PriceService:
         if not alerts:
             return
 
+        product = db.query(Product).filter(Product.id == product_id).first()
+        if not product:
+            return
+
+        set_number = (product.set_number or "").strip()
+        if not set_number:
+            return
+
         # Último precio disponible de cualquier fuente
         latest = (
             db.query(MarketPrice)
-            .filter(MarketPrice.product_id == product_id)
+            .join(Product, MarketPrice.product_id == Product.id)
+            .filter(
+                Product.set_number == set_number,
+                Product.deleted_at.is_(None),
+            )
             .order_by(MarketPrice.fetched_at.desc())
             .first()
         )
         if not latest:
             return
 
-        product = db.query(Product).filter(Product.id == product_id).first()
         current_price = self.select_price_by_condition(
             product.condition if product else None,
             latest.price_new,
@@ -457,6 +634,8 @@ class AlertService:
 class DashboardService:
     """Cálculo de KPIs para el panel de control."""
 
+    SPAIN_TZ = ZoneInfo("Europe/Madrid")
+
     def _select_market_price(
         self,
         condition: Optional[str],
@@ -468,6 +647,21 @@ class DashboardService:
         if condition in ("OPEN_COMPLETE", "OPEN_INCOMPLETE"):
             return price_used or price_new
         return price_used or price_new
+
+    def _latest_price_for_set(self, db: Session, set_number: Optional[str]) -> Optional[MarketPrice]:
+        if not set_number:
+            return None
+        return (
+            db.query(MarketPrice)
+            .join(Product, MarketPrice.product_id == Product.id)
+            .filter(
+                Product.set_number == set_number,
+                Product.deleted_at.is_(None),
+                MarketPrice.source == "bricklink",
+            )
+            .order_by(MarketPrice.fetched_at.desc())
+            .first()
+        )
 
     def _compute_current_totals(self, db: Session) -> tuple[Decimal, Decimal, Decimal]:
         """Recalcula el total actual como suma real de todos los productos activos."""
@@ -483,12 +677,7 @@ class DashboardService:
             qty = Decimal(str(product.quantity or 1))
             invested_value += Decimal(str(product.purchase_price or 0)) * qty
 
-            latest = (
-                db.query(MarketPrice)
-                .filter(MarketPrice.product_id == product.id, MarketPrice.source == "bricklink")
-                .order_by(MarketPrice.fetched_at.desc())
-                .first()
-            )
+            latest = self._latest_price_for_set(db, product.set_number)
             if latest:
                 selected = self._select_market_price(product.condition, latest.price_new, latest.price_used)
                 if selected is not None:
@@ -499,9 +688,17 @@ class DashboardService:
         profit_value = (market_value - invested_value).quantize(Decimal("0.01"))
         return invested_value, market_value, profit_value
 
-    def _bootstrap_daily_snapshots_from_market_history(self, db: Session, limit: int = 200) -> None:
-        """Inicializa histórico diario desde market_prices solo si aún no hay snapshots guardados."""
-        if db.query(PortfolioDailySnapshot.id).first():
+    def _bootstrap_daily_snapshots_from_market_history(
+        self,
+        db: Session,
+        limit: Optional[int] = 200,
+        force_reset: bool = False,
+    ) -> None:
+        """Inicializa/reconstruye snapshots diarios desde market_prices."""
+        if force_reset:
+            db.query(PortfolioDailySnapshot).delete()
+            db.commit()
+        elif db.query(PortfolioDailySnapshot.id).first():
             return
 
         from sqlalchemy import Date as SADate, cast
@@ -514,24 +711,33 @@ class DashboardService:
                 .filter(Product.deleted_at.is_(None), MarketPrice.source == "bricklink")
                 .group_by(cast(MarketPrice.fetched_at, SADate))
                 .order_by(cast(MarketPrice.fetched_at, SADate))
-                .limit(limit)
                 .all()
             )
         ]
+        if limit is not None:
+            days = days[:limit]
 
         products = db.query(Product).filter(Product.deleted_at.is_(None)).all()
         if not days or not products:
             return
 
-        product_histories: dict[UUID, list[MarketPrice]] = {}
+        product_histories: dict[str, list[MarketPrice]] = {}
         for product in products:
+            set_key = (product.set_number or "").strip()
+            if set_key in product_histories:
+                continue
             history = (
                 db.query(MarketPrice)
-                .filter(MarketPrice.product_id == product.id, MarketPrice.source == "bricklink")
+                .join(Product, MarketPrice.product_id == Product.id)
+                .filter(
+                    Product.set_number == product.set_number,
+                    Product.deleted_at.is_(None),
+                    MarketPrice.source == "bricklink",
+                )
                 .order_by(MarketPrice.fetched_at.asc())
                 .all()
             )
-            product_histories[product.id] = history
+            product_histories[set_key] = history
 
         for day in days:
             invested_value = Decimal("0")
@@ -543,7 +749,7 @@ class DashboardService:
                 qty = Decimal(str(product.quantity or 1))
                 invested_value += Decimal(str(product.purchase_price or 0)) * qty
 
-                history = product_histories.get(product.id, [])
+                history = product_histories.get((product.set_number or "").strip(), [])
                 latest = None
                 for snapshot in history:
                     fetched_at = snapshot.fetched_at
@@ -570,15 +776,19 @@ class DashboardService:
 
         db.commit()
 
-    def _upsert_today_snapshot(self, db: Session) -> None:
-        """Sobrescribe el valor del día actual con un recálculo completo de cartera."""
-        today = datetime.now(timezone.utc).date()
+    def rebuild_daily_snapshots_from_market_history(self, db: Session) -> None:
+        """Recalcula todo el histórico diario de cartera y actualiza el día actual."""
+        self._bootstrap_daily_snapshots_from_market_history(db, limit=None, force_reset=True)
+        self.upsert_today_snapshot_spain(db)
+
+    def _upsert_snapshot_for_date(self, db: Session, target_date: date) -> None:
+        """Sobrescribe el snapshot de una fecha concreta con recálculo completo."""
         invested_value, market_value, profit_value = self._compute_current_totals(db)
 
-        snapshot = db.query(PortfolioDailySnapshot).filter(PortfolioDailySnapshot.date == today).first()
+        snapshot = db.query(PortfolioDailySnapshot).filter(PortfolioDailySnapshot.date == target_date).first()
         if snapshot is None:
             snapshot = PortfolioDailySnapshot(
-                date=today,
+                date=target_date,
                 invested_value=invested_value,
                 market_value=market_value,
                 profit_value=profit_value,
@@ -590,6 +800,11 @@ class DashboardService:
             snapshot.profit_value = profit_value
 
         db.commit()
+
+    def upsert_today_snapshot_spain(self, db: Session) -> None:
+        """Upsert del snapshot diario usando calendario local de España."""
+        today_spain = datetime.now(self.SPAIN_TZ).date()
+        self._upsert_snapshot_for_date(db, today_spain)
 
     def get_summary(self, db: Session) -> DashboardSummary:
         products = db.query(Product).filter(
@@ -605,12 +820,7 @@ class DashboardService:
         # Último precio de mercado por producto, ajustado a su estado.
         total_market = Decimal("0")
         for p in products:
-            latest = (
-                db.query(MarketPrice)
-                .filter(MarketPrice.product_id == p.id)
-                .order_by(MarketPrice.fetched_at.desc())
-                .first()
-            )
+            latest = self._latest_price_for_set(db, p.set_number)
             if latest:
                 market_price = self._select_market_price(p.condition, latest.price_new, latest.price_used) or Decimal("0")
                 total_market += market_price * p.quantity
@@ -636,12 +846,7 @@ class DashboardService:
         results = []
 
         for p in products:
-            latest = (
-                db.query(MarketPrice)
-                .filter(MarketPrice.product_id == p.id)
-                .order_by(MarketPrice.fetched_at.desc())
-                .first()
-            )
+            latest = self._latest_price_for_set(db, p.set_number)
             market_value = None
             margin_pct = None
             if latest:
@@ -707,7 +912,12 @@ class DashboardService:
         for product in products:
             history = (
                 db.query(MarketPrice)
-                .filter(MarketPrice.product_id == product.id, MarketPrice.source == "bricklink")
+                .join(Product, MarketPrice.product_id == Product.id)
+                .filter(
+                    Product.set_number == product.set_number,
+                    Product.deleted_at.is_(None),
+                    MarketPrice.source == "bricklink",
+                )
                 .order_by(MarketPrice.fetched_at.asc())
                 .all()
             )
@@ -806,7 +1016,7 @@ class DashboardService:
         from app.schemas.price import PriceTrendPoint
 
         self._bootstrap_daily_snapshots_from_market_history(db)
-        self._upsert_today_snapshot(db)
+        self.upsert_today_snapshot_spain(db)
 
         rows = (
             db.query(PortfolioDailySnapshot)

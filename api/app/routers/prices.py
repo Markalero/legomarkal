@@ -2,7 +2,7 @@
 from typing import List
 from uuid import UUID
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 import asyncio
 
@@ -40,9 +40,20 @@ def get_price_history_trend(
 
 
 @router.post("/scrape/{product_id}", status_code=202)
-def scrape_product(product_id: UUID, background_tasks: BackgroundTasks, db: Session = Depends(get_db), _: str = Depends(get_current_user)):
-    """Lanza scraping en background para un producto concreto."""
+def scrape_product(
+    product_id: UUID,
+    background_tasks: BackgroundTasks,
+    wait: bool = Query(False, description="Si true, ejecuta scraping síncrono para ese producto."),
+    db: Session = Depends(get_db),
+    _: str = Depends(get_current_user),
+):
+    """Lanza scraping de producto en background o síncrono."""
     from app.scraper.runner import scrape_single_product
+
+    if wait:
+        scrape_single_product(product_id)
+        return {"message": "Scraping completado", "product_id": str(product_id)}
+
     background_tasks.add_task(scrape_single_product, product_id)
     return {"message": "Scraping iniciado en background", "product_id": str(product_id)}
 
