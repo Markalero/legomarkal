@@ -132,7 +132,7 @@ export default function ProductDetailPage({ params }: Props) {
   // `latest_market_price` almacenado en `product`.
   function findLastPriceFromHistory() {
     if (!priceHistory || !priceHistory.points || priceHistory.points.length === 0) return null;
-    const cond = product.condition ?? priceHistory.condition ?? null;
+    const cond = product?.condition ?? priceHistory.condition ?? null;
     for (let i = priceHistory.points.length - 1; i >= 0; i--) {
       const p = priceHistory.points[i];
       const v = cond === "SEALED" ? p.price_new ?? null : p.price_used ?? null;
