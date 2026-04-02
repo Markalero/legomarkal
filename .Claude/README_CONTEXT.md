@@ -33,6 +33,8 @@ Fecha de actualización: 2026-04-02 (refresh de precios en dos fases UI+BBDD+scr
 - Históricos mensuales por producto ahora se rellenan con datos reales del Price Guide de BrickLink (meses disponibles), sin interpolación/siembra artificial; si falta un mes, se omite.
 - Historial de precios sin backfill sintético: solo snapshots reales guardados desde scraper/importación.
 - Cálculo de valor de mercado ajustado por estado: `SEALED => price_new`, `OPEN_COMPLETE/OPEN_INCOMPLETE => price_used`.
+- Dashboard alineado con inventario al seleccionar siempre el último snapshot válido por condición (`SEALED` requiere `price_new`, abierto requiere `price_used`), evitando excluir sets con precio parcial en el último scrape.
+- Evolución del dashboard endurecida: reconstrucción completa de `portfolio_daily_snapshots` en la consulta de tendencias para corregir históricos heredados por lógica anterior.
 - Inventario simplificado: sin categorías ni ubicaciones en UI/API/BBDD.
 - UX de imágenes mejorada: confirmación al borrar y visor fullscreen con navegación (flechas, teclado y miniaturas).
 - Sección "Consulta por código LEGO" eliminada de la vista de precios.

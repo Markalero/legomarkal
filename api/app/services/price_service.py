@@ -676,9 +676,21 @@ class DashboardService:
             return price_used
         return price_used
 
-    def _latest_price_for_set(self, db: Session, set_number: Optional[str]) -> Optional[MarketPrice]:
+    def _latest_price_for_set(
+        self,
+        db: Session,
+        set_number: Optional[str],
+        condition: Optional[str],
+    ) -> Optional[MarketPrice]:
         if not set_number:
             return None
+
+        condition_price_filter = (
+            MarketPrice.price_new.isnot(None)
+            if condition == "SEALED"
+            else MarketPrice.price_used.isnot(None)
+        )
+
         return (
             db.query(MarketPrice)
             .join(Product, MarketPrice.product_id == Product.id)
@@ -686,6 +698,7 @@ class DashboardService:
                 Product.set_number == set_number,
                 Product.deleted_at.is_(None),
                 MarketPrice.source == "bricklink",
+                condition_price_filter,
             )
             .order_by(MarketPrice.fetched_at.desc())
             .first()
@@ -705,7 +718,7 @@ class DashboardService:
             qty = Decimal(str(product.quantity or 1))
             invested_value += Decimal(str(product.purchase_price or 0)) * qty
 
-            latest = self._latest_price_for_set(db, product.set_number)
+            latest = self._latest_price_for_set(db, product.set_number, product.condition)
             if latest:
                 selected = self._select_market_price(product.condition, latest.price_new, latest.price_used)
                 if selected is not None:
@@ -736,7 +749,11 @@ class DashboardService:
             for row in (
                 db.query(cast(MarketPrice.fetched_at, SADate).label("date"))
                 .join(Product, MarketPrice.product_id == Product.id)
-                .filter(Product.deleted_at.is_(None), MarketPrice.source == "bricklink")
+                .filter(
+                    Product.deleted_at.is_(None),
+                    Product.availability == "available",
+                    MarketPrice.source == "bricklink",
+                )
                 .group_by(cast(MarketPrice.fetched_at, SADate))
                 .order_by(cast(MarketPrice.fetched_at, SADate))
                 .all()
@@ -745,7 +762,10 @@ class DashboardService:
         if limit is not None:
             days = days[:limit]
 
-        products = db.query(Product).filter(Product.deleted_at.is_(None)).all()
+        products = db.query(Product).filter(
+            Product.deleted_at.is_(None),
+            Product.availability == "available",
+        ).all()
         if not days or not products:
             return
 
@@ -785,7 +805,9 @@ class DashboardService:
                         fetched_at = fetched_at.astimezone(timezone.utc).replace(tzinfo=None)
 
                     if fetched_at <= day_end:
-                        latest = snapshot
+                        selected = self._select_market_price(product.condition, snapshot.price_new, snapshot.price_used)
+                        if selected is not None:
+                            latest = snapshot
                     else:
                         break
 
@@ -848,7 +870,7 @@ class DashboardService:
         # Último precio de mercado por producto, ajustado a su estado.
         total_market = Decimal("0")
         for p in products:
-            latest = self._latest_price_for_set(db, p.set_number)
+            latest = self._latest_price_for_set(db, p.set_number, p.condition)
             if latest:
                 market_price = self._select_market_price(p.condition, latest.price_new, latest.price_used) or Decimal("0")
                 total_market += market_price * p.quantity
@@ -874,7 +896,7 @@ class DashboardService:
         results = []
 
         for p in products:
-            latest = self._latest_price_for_set(db, p.set_number)
+            latest = self._latest_price_for_set(db, p.set_number, p.condition)
             market_value = None
             margin_pct = None
             if latest:
@@ -1040,11 +1062,10 @@ class DashboardService:
         )
 
     def get_price_trends(self, db: Session) -> list:
-        """Devuelve evolución diaria persistida y recalcula siempre el valor del día actual."""
+        """Devuelve evolución diaria persistida y la reconstruye para garantizar consistencia."""
         from app.schemas.price import PriceTrendPoint
 
-        self._bootstrap_daily_snapshots_from_market_history(db)
-        self.upsert_today_snapshot_spain(db)
+        self.rebuild_daily_snapshots_from_market_history(db)
 
         rows = (
             db.query(PortfolioDailySnapshot)
