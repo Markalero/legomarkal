@@ -4,7 +4,10 @@
       "Bash(ls -la /c/Users/Ander/Desktop/juegos/yop/LegoMarkal/.env*)",
       "Bash(ls -la /c/Users/Ander/Desktop/juegos/yop/LegoMarkal/*.env)",
       "Bash(/c/Users/Ander/Desktop/juegos/yop/LegoMarkal/.venv/Scripts/python.exe -c \":*)",
-      "Bash(cat /c/Users/Ander/Desktop/juegos/yop/LegoMarkal/api/scripts/*.py)"
+      "Bash(cat /c/Users/Ander/Desktop/juegos/yop/LegoMarkal/api/scripts/*.py)",
+      "Bash(python -m pytest tests/test_scraper_parsing.py -v)",
+      "Bash(python -m pytest tests/ -v --ignore=tests/test_dashboard.py --ignore=tests/test_prices.py --ignore=tests/test_auth.py --ignore=tests/test_products.py --ignore=tests/test_alerts.py)",
+      "Bash(python -c \"from app.services.price_service import price_service, dashboard_service; from app.scraper.bricklink_scraper import BrickLinkScraper; print\\('OK'\\)\")"
     ]
   }
 }

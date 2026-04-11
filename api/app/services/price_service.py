@@ -2,6 +2,7 @@
 from collections import defaultdict
 import calendar
 from datetime import date, datetime, timedelta, timezone
+import logging
 from decimal import Decimal
 from typing import List, Optional
 from uuid import UUID
@@ -20,6 +21,8 @@ from app.schemas.price import (
     RealProfitSummary,
     TopMarginProduct,
 )
+
+logger = logging.getLogger(__name__)
 
 
 class PriceService:
@@ -365,11 +368,19 @@ class PriceService:
 
         storage_product_id = self._resolve_storage_product_id(db, product_id)
 
+        today_spain = self._now_spain().date()
         normalized_points: list[dict] = []
         keep_dates: set[date] = set()
         for point in points:
             fetched_at = point.get("fetched_at")
             if not isinstance(fetched_at, datetime):
+                continue
+            # Descarta puntos con fecha futura (segunda barrera tras el parser).
+            if fetched_at.date() > today_spain:
+                logger.warning(
+                    "save_monthly_history_points: ignorando punto con fecha futura %s",
+                    fetched_at.date(),
+                )
                 continue
             normalized_points.append(point)
             keep_dates.add(fetched_at.date())
@@ -602,13 +613,14 @@ class PriceService:
         if not set_number:
             return
 
-        # Último precio disponible de cualquier fuente
+        # Último precio BrickLink (fuente oficial de referencia para alertas).
         latest = (
             db.query(MarketPrice)
             .join(Product, MarketPrice.product_id == Product.id)
             .filter(
                 Product.set_number == set_number,
                 Product.deleted_at.is_(None),
+                MarketPrice.source == "bricklink",
             )
             .order_by(MarketPrice.fetched_at.desc())
             .first()
@@ -744,6 +756,7 @@ class DashboardService:
 
         from sqlalchemy import Date as SADate, cast
 
+        today_spain = datetime.now(self.SPAIN_TZ).date()
         days = [
             row.date
             for row in (
@@ -753,6 +766,8 @@ class DashboardService:
                     Product.deleted_at.is_(None),
                     Product.availability == "available",
                     MarketPrice.source == "bricklink",
+                    # Excluye fechas futuras para que los snapshots solo reflejen días pasados/hoy.
+                    cast(MarketPrice.fetched_at, SADate) <= today_spain,
                 )
                 .group_by(cast(MarketPrice.fetched_at, SADate))
                 .order_by(cast(MarketPrice.fetched_at, SADate))
@@ -1062,10 +1077,12 @@ class DashboardService:
         )
 
     def get_price_trends(self, db: Session) -> list:
-        """Devuelve evolución diaria persistida y la reconstruye para garantizar consistencia."""
-        from app.schemas.price import PriceTrendPoint
+        """Devuelve evolución diaria persistida de portfolio.
 
-        self.rebuild_daily_snapshots_from_market_history(db)
+        La reconstrucción del histórico se realiza únicamente desde el endpoint
+        /scraper/refresh-all o el scheduler nocturno; no en cada lectura.
+        """
+        from app.schemas.price import PriceTrendPoint
 
         rows = (
             db.query(PortfolioDailySnapshot)

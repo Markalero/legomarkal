@@ -336,6 +336,7 @@ class BrickLinkScraper(BaseScraper):
             new_values = all_new_candidates + ([price_new] if price_new is not None else [])
             used_values = all_used_candidates + ([price_used] if price_used is not None else [])
 
+            today_utc = datetime.now(timezone.utc).date()
             monthly_history: list[dict] = []
             for year, month in sorted(monthly_map.keys()):
                 row = monthly_map[(year, month)]
@@ -355,6 +356,15 @@ class BrickLinkScraper(BaseScraper):
 
                 month_last_day = calendar.monthrange(year, month)[1]
                 fetched_at = datetime(year, month, month_last_day, 23, 59, 59, tzinfo=timezone.utc)
+
+                # Ignorar puntos con fecha futura para evitar contaminación del historial.
+                if fetched_at.date() > today_utc:
+                    logger.debug(
+                        f"_parse_price_guide: descartando punto futuro {fetched_at.date()} "
+                        f"para set {set_number}"
+                    )
+                    continue
+
                 monthly_history.append(
                     {
                         "fetched_at": fetched_at,
@@ -503,10 +513,9 @@ class BrickLinkScraper(BaseScraper):
         return re.sub(r"\s+", "", (token or "").upper())
 
     def _convert_to_eur(self, amount: Decimal, token: str) -> Optional[Decimal]:
+        # Solo EUR y USD (convertido) son fuentes válidas; RON/ROL y otras monedas se ignoran.
         if token in {"EUR", "€"}:
             return amount.quantize(Decimal("0.01"))
         if token in {"USD", "US$", "$"}:
             return (amount * self.USD_TO_EUR_RATE).quantize(Decimal("0.01"))
-        if token in {"RON", "ROL"}:
-            return (amount * self.RON_TO_EUR_RATE).quantize(Decimal("0.01"))
         return None
