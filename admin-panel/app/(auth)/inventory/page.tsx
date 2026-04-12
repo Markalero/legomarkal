@@ -15,6 +15,7 @@ import { RefreshProgressOverlay } from "@/components/ui/RefreshProgressOverlay";
 import { useRefreshProgress } from "@/lib/useRefreshProgress";
 import { dashboardApi, productsApi } from "@/lib/api-client";
 import { toUiError } from "@/lib/utils";
+import { useToast } from "@/lib/toast-context";
 import type { ProductListOut, ProductFilters } from "@/types";
 
 const DEFAULT_FILTERS: ProductFilters = { page: 1, size: 20 };
@@ -37,7 +38,9 @@ export default function InventoryPage() {
   const [resetLoading, setResetLoading] = useState(false);
   const [purchaseSources, setPurchaseSources] = useState<string[]>([]);
   const [newPurchaseSource, setNewPurchaseSource] = useState("");
+  const [exportLoading, setExportLoading] = useState(false);
   const { refreshing: refreshingAll, progress: refreshProgress, status: refreshStatus, setProgress, setStatus, begin, end, startPredictiveProgress, stopPredictorRef } = useRefreshProgress();
+  const toast = useToast();
 
   const load = useCallback(async (f: ProductFilters) => {
     setError(null);
@@ -140,18 +143,63 @@ export default function InventoryPage() {
   }
 
   async function handleExport() {
+    setExportLoading(true);
+    const toastId = toast.progress("Exportando backup…", "Conectando con la base de datos…");
+
+    // Animación predictiva por fases mientras espera la respuesta de Supabase
+    let currentPct = 0;
+    let intervalId: ReturnType<typeof setInterval> | null = null;
+
+    const phases = [
+      { upTo: 20, label: "Conectando con la base de datos…", msPerStep: 15 },
+      { upTo: 85, label: "Obteniendo datos de Supabase…", msPerStep: 80 },
+    ];
+    let phaseIdx = 0;
+
+    function advancePhase() {
+      if (phaseIdx >= phases.length) return;
+      const phase = phases[phaseIdx];
+      intervalId = setInterval(() => {
+        currentPct++;
+        toast.update(toastId, currentPct, phase.label);
+        if (currentPct >= phase.upTo) {
+          clearInterval(intervalId!);
+          intervalId = null;
+          phaseIdx++;
+          advancePhase();
+        }
+      }, phase.msPerStep);
+    }
+
+    advancePhase();
+
     try {
       const blob = await productsApi.exportAllData();
+
+      // Detener animación predictiva y saltar a fase final
+      if (intervalId) { clearInterval(intervalId); intervalId = null; }
+      toast.update(toastId, 95, "Preparando archivo…");
+
+      // Corrección del bug: el <a> debe estar en el DOM para disparar la descarga en todos los navegadores
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
       a.download = `legomarkal_backup_${new Date().toISOString().split("T")[0]}.json`;
+      document.body.appendChild(a);
       a.click();
-      URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(url), 150);
+
+      toast.complete(toastId, "Backup descargado");
     } catch (e: unknown) {
+      if (intervalId) clearInterval(intervalId);
+      toast.dismiss(toastId);
       const uiError = toUiError(e, "No se pudo exportar el backup completo.");
+      toast.error(uiError.message);
       setError(uiError.message);
       setErrorDetails(uiError.details ?? null);
+    } finally {
+      setExportLoading(false);
     }
   }
 
@@ -163,6 +211,7 @@ export default function InventoryPage() {
       await productsApi.resetAllData();
       setResetOpen(false);
       setSettingsOpen(false);
+      toast.success("Todos los datos han sido eliminados");
 
       const nextFilters = { ...DEFAULT_FILTERS };
       setFilters(nextFilters);
@@ -194,6 +243,7 @@ export default function InventoryPage() {
       const uiError = toUiError(e, "No se pudo cambiar la disponibilidad del producto.");
       setError(uiError.message);
       setErrorDetails(uiError.details ?? null);
+      toast.error(uiError.message);
     }
   }
 
@@ -289,6 +339,7 @@ export default function InventoryPage() {
         <BulkImport
           onSuccess={() => {
             setImportOpen(false);
+            toast.success("Backup importado correctamente");
             load(filters);
           }}
         />
@@ -304,9 +355,15 @@ export default function InventoryPage() {
           <div className="space-y-3">
             <p className="text-sm font-medium text-text-primary">Datos</p>
             <div className="flex flex-wrap gap-2">
-              <Button variant="secondary" size="sm" onClick={handleExport}>
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={handleExport}
+                loading={exportLoading}
+                disabled={exportLoading}
+              >
                 <Download className="h-4 w-4" />
-                Exportar backup (JSON)
+                {exportLoading ? "Exportando…" : "Exportar backup (JSON)"}
               </Button>
               <Button variant="secondary" size="sm" onClick={() => { setSettingsOpen(false); setImportOpen(true); }}>
                 <Upload className="h-4 w-4" />
@@ -315,6 +372,7 @@ export default function InventoryPage() {
               <Button
                 variant="danger"
                 size="sm"
+                disabled={exportLoading}
                 onClick={() => {
                   setSettingsOpen(false);
                   setResetOpen(true);
