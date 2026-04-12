@@ -1,7 +1,7 @@
 // Tarjeta KPI con valor principal y delta-indicator (variación vs período anterior)
 import { Card } from "@/components/ui/Card";
 import { TrendingUp, TrendingDown, Minus } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { cn, formatPct } from "@/lib/utils";
 
 interface KpiCardProps {
   title: string;
@@ -40,7 +40,7 @@ export function KpiCard({ title, value, delta, icon, description }: KpiCardProps
             {deltaPositive && <TrendingUp className="h-3.5 w-3.5" />}
             {deltaNegative && <TrendingDown className="h-3.5 w-3.5" />}
             {!deltaPositive && !deltaNegative && <Minus className="h-3.5 w-3.5" />}
-            {Math.abs(delta).toFixed(1)}%
+            {formatPct(delta)}
           </span>
         )}
       </div>
