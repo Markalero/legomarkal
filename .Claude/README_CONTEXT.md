@@ -1,6 +1,6 @@
 # README_CONTEXT
 
-Fecha de actualización: 2026-04-02 (refresh de precios en dos fases UI+BBDD+scraper forzado y cobertura diaria por hora España)
+Fecha de actualización: 2026-04-12 (auto-migración Alembic en arranque backend para evitar desalineación código/BBDD)
 
 ---
 
@@ -11,6 +11,7 @@ Fecha de actualización: 2026-04-02 (refresh de precios en dos fases UI+BBDD+scr
 - Modelo de datos y migración inicial creados.
 - Endpoints REST implementados y protegidos con JWT.
 - Scraping de precios operativo (manual y schedulado).
+- Backend endurecido en despliegue: al arrancar ejecuta `alembic upgrade head` automáticamente antes de exponer la API.
 - Parsing de precios robusto en scrapers (soporte para EUR/USD/GBP y formatos decimales ES/EN).
 - Login/frontend endurecido ante fallos de red (sin runtime crash por fetch) y guard de rutas auth antes de renderizar páginas protegidas.
 - Tests de integración parametrizables con `TEST_BASE_URL` para evitar dependencia rígida del puerto 8000.

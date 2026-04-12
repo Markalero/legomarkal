@@ -16,6 +16,38 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
+def _run_pending_migrations() -> None:
+    """Aplica migraciones Alembic pendientes antes de arrancar la API.
+
+    Evita desalineaciones entre código y esquema (p. ej. en despliegues PaaS
+    donde no se ejecuta manualmente `alembic upgrade head`).
+    """
+    try:
+        from alembic import command
+        from alembic.config import Config
+
+        project_root = Path(__file__).resolve().parents[1]
+        alembic_ini = project_root / "alembic.ini"
+        alembic_dir = project_root / "alembic"
+
+        if not alembic_ini.exists() or not alembic_dir.exists():
+            logger.warning(
+                "Startup: Alembic no encontrado en %s; se omiten migraciones automáticas",
+                project_root,
+            )
+            return
+
+        alembic_cfg = Config(str(alembic_ini))
+        # Fijamos rutas absolutas para funcionar igual desde cualquier CWD.
+        alembic_cfg.set_main_option("script_location", str(alembic_dir))
+
+        command.upgrade(alembic_cfg, "head")
+        logger.info("Startup: migraciones Alembic aplicadas correctamente (head)")
+    except Exception as exc:
+        logger.error("Startup: error aplicando migraciones Alembic: %s", exc, exc_info=True)
+        raise
+
+
 async def _clean_future_market_prices() -> None:
     """Elimina filas de market_prices cuya fecha es posterior a hoy en España.
 
@@ -100,6 +132,7 @@ async def lifespan(app: FastAPI):
 
     Primero limpia datos futuros residuales, luego lanza scraping si es necesario.
     """
+    _run_pending_migrations()
     start_scheduler()
     await _clean_future_market_prices()
     asyncio.create_task(_startup_scrape_if_needed())
