@@ -404,6 +404,19 @@ class PriceService:
                 if row_date not in keep_dates:
                     db.delete(row)
 
+            # Borra también filas con fecha futura (segunda barrera de seguridad).
+            future_rows = (
+                db.query(MarketPrice)
+                .filter(
+                    MarketPrice.product_id == storage_product_id,
+                    MarketPrice.source == source,
+                    cast(MarketPrice.fetched_at, SADate) > today_spain,
+                )
+                .all()
+            )
+            for row in future_rows:
+                db.delete(row)
+
         saved = 0
         for point in normalized_points:
             fetched_at = point.get("fetched_at")
@@ -697,6 +710,7 @@ class DashboardService:
         if not set_number:
             return None
 
+        today_spain = datetime.now(self.SPAIN_TZ).date()
         condition_price_filter = (
             MarketPrice.price_new.isnot(None)
             if condition == "SEALED"
@@ -711,6 +725,7 @@ class DashboardService:
                 Product.deleted_at.is_(None),
                 MarketPrice.source == "bricklink",
                 condition_price_filter,
+                cast(MarketPrice.fetched_at, SADate) <= today_spain,
             )
             .order_by(MarketPrice.fetched_at.desc())
             .first()
@@ -938,6 +953,7 @@ class DashboardService:
         """Devuelve min/medio/max diario para análisis global de precios de mercado."""
         from sqlalchemy import cast, Date as SADate, func
 
+        today_spain = datetime.now(self.SPAIN_TZ).date()
         base_price = func.coalesce(MarketPrice.price_new, MarketPrice.price_used)
         rows = (
             db.query(
@@ -946,7 +962,10 @@ class DashboardService:
                 func.avg(base_price).label("avg_price"),
                 func.max(base_price).label("max_price"),
             )
-            .filter(MarketPrice.source == "bricklink")
+            .filter(
+                MarketPrice.source == "bricklink",
+                cast(MarketPrice.fetched_at, SADate) <= today_spain,
+            )
             .group_by(cast(MarketPrice.fetched_at, SADate))
             .order_by(cast(MarketPrice.fetched_at, SADate))
             .limit(365)
@@ -965,6 +984,7 @@ class DashboardService:
 
     def get_price_insights(self, db: Session, limit: int = 200) -> List[PriceInsightProduct]:
         """Calcula métricas por set y ordena por beneficio absoluto en euros."""
+        today_spain = datetime.now(self.SPAIN_TZ).date()
         products = (
             db.query(Product)
             .filter(Product.deleted_at.is_(None), Product.availability == "available")
@@ -982,6 +1002,7 @@ class DashboardService:
                     Product.set_number == product.set_number,
                     Product.deleted_at.is_(None),
                     MarketPrice.source == "bricklink",
+                    cast(MarketPrice.fetched_at, SADate) <= today_spain,
                 )
                 .order_by(MarketPrice.fetched_at.asc())
                 .all()

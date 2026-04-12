@@ -16,6 +16,40 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
+async def _clean_future_market_prices() -> None:
+    """Elimina filas de market_prices cuya fecha es posterior a hoy en España.
+
+    Estas filas son artefactos de versiones previas del scraper. La limpieza
+    es idempotente y se ejecuta siempre que arranca el servidor.
+    """
+    try:
+        from sqlalchemy import cast, Date as SADate
+        from app.database import SessionLocal
+        from app.models.price import MarketPrice
+        from app.services.price_service import price_service
+
+        db = SessionLocal()
+        try:
+            today = price_service._now_spain().date()
+            deleted = (
+                db.query(MarketPrice)
+                .filter(cast(MarketPrice.fetched_at, SADate) > today)
+                .delete(synchronize_session=False)
+            )
+            if deleted:
+                db.commit()
+                logger.info(
+                    "Startup: eliminados %d registros con fecha futura en market_prices",
+                    deleted,
+                )
+            else:
+                logger.info("Startup: sin registros futuros en market_prices — OK")
+        finally:
+            db.close()
+    except Exception as exc:
+        logger.error("Error limpiando fechas futuras: %s", exc, exc_info=True)
+
+
 async def _startup_scrape_if_needed() -> None:
     """Comprueba al arrancar si hoy (hora España) ya tiene precios guardados.
 
@@ -64,10 +98,10 @@ async def _startup_scrape_if_needed() -> None:
 async def lifespan(app: FastAPI):
     """Arranca el scheduler al iniciar y lo para al apagar.
 
-    También lanza un scraping inmediato si el día actual no tiene datos,
-    para cubrir los días en que el servidor no estaba activo a las 3:00 AM.
+    Primero limpia datos futuros residuales, luego lanza scraping si es necesario.
     """
     start_scheduler()
+    await _clean_future_market_prices()
     asyncio.create_task(_startup_scrape_if_needed())
     yield
     stop_scheduler()
