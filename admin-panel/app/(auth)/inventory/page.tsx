@@ -131,17 +131,16 @@ export default function InventoryPage() {
   async function handleToggleAvailability(
     productId: string,
     currentAvailability: "available" | "sold",
-    soldPrice?: number,
-    soldDate?: string,
   ) {
-    const nextAvailability = currentAvailability === "available" ? "sold" : "available";
-    await productsApi.update(productId, {
-      availability: nextAvailability,
-      // Al marcar como vendido se guardan precio y fecha; al revertir se limpian
-      sold_price: nextAvailability === "sold" ? (soldPrice ?? null) : null,
-      sold_date: nextAvailability === "sold" ? (soldDate ?? null) : null,
-    });
-    await load(filters);
+    // Solo se llega aquí para revertir a "available"; el flujo "sold" lo gestiona SaleModal.
+    if (currentAvailability === "sold") {
+      await productsApi.update(productId, {
+        availability: "available",
+        sold_price: null,
+        sold_date: null,
+      });
+      await load(filters);
+    }
   }
 
   function persistList(key: string, list: string[]) {
@@ -214,6 +213,7 @@ export default function InventoryPage() {
               data={data}
               onPageChange={(page) => setFilters((f) => ({ ...f, page }))}
               onToggleAvailability={handleToggleAvailability}
+              onSaleComplete={() => load(filters)}
             />
           ) : null}
         </Card>

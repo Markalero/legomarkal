@@ -127,6 +127,25 @@ export const productsApi = {
       body: form,
     });
   },
+
+  uploadSaleReceipts: (id: string, files: File[]) => {
+    const form = new FormData();
+    files.forEach((f) => form.append("files", f));
+    return request<Product>(`/products/${id}/sale-receipts`, {
+      method: "POST",
+      body: form,
+    });
+  },
+
+  deleteSaleReceipt: (id: string, receiptId: string) =>
+    request<void>(`/products/${id}/sale-receipts/${receiptId}`, {
+      method: "DELETE",
+    }),
+
+  getSaleReceiptDownloadUrl: (id: string, receiptId: string) =>
+    request<{ url: string }>(
+      `/products/${id}/sale-receipts/${receiptId}/download`
+    ),
 };
 
 // ── Precios de mercado ────────────────────────────────────────────────────────

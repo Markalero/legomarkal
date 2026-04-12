@@ -9,7 +9,8 @@ import { Card, CardHeader, CardTitle } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { RefreshPricesButton } from "@/components/ui/RefreshPricesButton";
 import { Badge } from "@/components/ui/Badge";
-import { SellModal } from "@/components/ui/SellModal";
+import { SaleModal } from "@/components/inventory/SaleModal";
+import { SaleReceiptList } from "@/components/product/SaleReceiptList";
 import { PriceHistory } from "@/components/product/PriceHistory";
 import { ImageUpload } from "@/components/product/ImageUpload";
 import { productsApi, pricesApi, alertsApi } from "@/lib/api-client";
@@ -89,16 +90,6 @@ export default function ProductDetailPage({ params }: Props) {
         .update(params.id, { availability: "available", sold_price: null, sold_date: null })
         .then(setProduct);
     }
-  }
-
-  async function handleConfirmSell(soldPrice: number, soldDate: string) {
-    setSellModalOpen(false);
-    const updated = await productsApi.update(params.id, {
-      availability: "sold",
-      sold_price: soldPrice,
-      sold_date: soldDate,
-    });
-    setProduct(updated);
   }
 
   async function handleCreateAlert() {
@@ -388,16 +379,38 @@ export default function ProductDetailPage({ params }: Props) {
                 </ul>
               )}
             </Card>
+
+            {/* Recibos de venta — solo visible cuando el producto está vendido */}
+            {isSold && (
+              <Card>
+                <CardHeader>
+                  <CardTitle>
+                    Recibos de venta ({(product.sale_receipts ?? []).length})
+                  </CardTitle>
+                </CardHeader>
+                <SaleReceiptList
+                  productId={product.id}
+                  receipts={product.sale_receipts ?? []}
+                  onUpdate={(updated) =>
+                    setProduct({ ...product, sale_receipts: updated })
+                  }
+                />
+              </Card>
+            )}
           </div>
         </div>
       </div>
 
       {/* Modal de venta — fuera del layout principal para evitar problemas de z-index */}
-      <SellModal
+      <SaleModal
         open={sellModalOpen}
+        productId={params.id}
         productName={product.name}
-        suggestedPrice={marketPrice}
-        onConfirm={handleConfirmSell}
+        suggestedPrice={marketPrice ?? null}
+        onSuccess={() => {
+          setSellModalOpen(false);
+          load();
+        }}
         onCancel={() => setSellModalOpen(false)}
       />
     </div>

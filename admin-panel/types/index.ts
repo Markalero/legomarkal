@@ -17,6 +17,13 @@ export interface TokenOut {
 export type Condition = "SEALED" | "OPEN_COMPLETE" | "OPEN_INCOMPLETE";
 export type Availability = "available" | "sold";
 
+export interface SaleReceipt {
+  id: string;
+  filename: string;
+  storage_path: string;
+  uploaded_at: string;
+}
+
 export interface Product {
   id: string;
   set_number: string | null;
@@ -33,6 +40,7 @@ export interface Product {
   availability: Availability;
   sold_date: string | null;
   sold_price: number | null;
+  sale_receipts: SaleReceipt[];
   deleted_at: string | null;
   created_at: string;
   updated_at: string;

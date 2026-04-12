@@ -7,7 +7,7 @@ import { useState } from "react";
 import { ChevronLeft, ChevronRight, ExternalLink } from "lucide-react";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
-import { SellModal } from "@/components/ui/SellModal";
+import { SaleModal } from "@/components/inventory/SaleModal";
 import {
   formatCurrency,
   formatPct,
@@ -39,9 +39,9 @@ interface InventoryTableProps {
   onToggleAvailability?: (
     productId: string,
     currentAvailability: "available" | "sold",
-    soldPrice?: number,
-    soldDate?: string,
   ) => void;
+  /** Llamado tras completar la venta (PATCH + upload) para refrescar la lista */
+  onSaleComplete?: () => void;
 }
 
 /** Estado del modal de venta: qué producto está siendo marcado como vendido */
@@ -57,7 +57,7 @@ function marginBadge(pct: number | null) {
   return <Badge variant={variant}>{formatPct(pct)}</Badge>;
 }
 
-export function InventoryTable({ data, onPageChange, onToggleAvailability }: InventoryTableProps) {
+export function InventoryTable({ data, onPageChange, onToggleAvailability, onSaleComplete }: InventoryTableProps) {
   const router = useRouter();
   const { items, total, page, size, pages } = data;
   const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
@@ -73,13 +73,14 @@ export function InventoryTable({ data, onPageChange, onToggleAvailability }: Inv
   return (
     <>
       {/* Modal de venta — fuera del <table> para evitar nesting inválido en el DOM */}
-      <SellModal
+      <SaleModal
         open={sellTarget !== null}
+        productId={sellTarget?.productId ?? ""}
         productName={sellTarget?.productName ?? ""}
         suggestedPrice={sellTarget?.suggestedPrice ?? null}
-        onConfirm={(soldPrice, soldDate) => {
-          onToggleAvailability?.(sellTarget!.productId, "available", soldPrice, soldDate);
+        onSuccess={() => {
           setSellTarget(null);
+          onSaleComplete?.();
         }}
         onCancel={() => setSellTarget(null)}
       />
