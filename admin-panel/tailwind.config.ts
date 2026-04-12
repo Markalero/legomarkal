@@ -46,11 +46,16 @@ const config: Config = {
           from: { opacity: "0", transform: "scale(0.96)" },
           to: { opacity: "1", transform: "scale(1)" },
         },
+        "slide-in-right": {
+          from: { opacity: "0", transform: "translateX(20px)" },
+          to: { opacity: "1", transform: "translateX(0)" },
+        },
       },
       animation: {
         "fade-in": "fade-in 0.2s ease-out both",
         "slide-up-fade": "slide-up-fade 0.25s ease-out both",
         "zoom-in-fade": "zoom-in-fade 0.15s ease-out both",
+        "slide-in-right": "slide-in-right 0.2s ease-out both",
       },
     },
   },
