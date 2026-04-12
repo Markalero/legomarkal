@@ -1,23 +1,116 @@
 # Router de productos — CRUD, paginación, filtros, importación, exportación y recibos PDF
 import csv
 import io
+import json
+from datetime import date, datetime
+from decimal import Decimal
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
 from uuid import UUID
 from uuid import uuid4
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
 from fastapi.responses import StreamingResponse
+from sqlalchemy import Boolean, Date as SADate, Integer, Numeric, String, TIMESTAMP
+from sqlalchemy.dialects.postgresql import JSONB, UUID as PGUUID
 from sqlalchemy.orm import Session
 
 from app.auth import get_current_user
 from app.database import get_db
+from app.models.price import MarketPrice, PortfolioDailySnapshot, PriceAlert
+from app.models.product import Product
 from app.schemas.product import ProductCreate, ProductListOut, ProductOut, ProductQuickCreate, ProductUpdate
 from app.services.product_service import product_service
 from app.services.import_service import bulk_import
 from app.services.storage_service import StorageService
 
 router = APIRouter(prefix="/products", tags=["products"])
+
+BACKUP_FORMAT = "legomarkal-backup-v1"
+BACKUP_MODELS = {
+    "products": Product,
+    "market_prices": MarketPrice,
+    "price_alerts": PriceAlert,
+    "portfolio_daily_snapshots": PortfolioDailySnapshot,
+}
+
+
+def _serialize_value(value: Any) -> Any:
+    if isinstance(value, Decimal):
+        return float(value)
+    if isinstance(value, (datetime, date)):
+        return value.isoformat()
+    if isinstance(value, UUID):
+        return str(value)
+    return value
+
+
+def _model_to_record(instance: Any) -> dict[str, Any]:
+    return {
+        column.name: _serialize_value(getattr(instance, column.name))
+        for column in instance.__table__.columns
+    }
+
+
+def _coerce_value(column: Any, value: Any) -> Any:
+    if value is None:
+        return None
+
+    col_type = column.type
+
+    if isinstance(col_type, PGUUID):
+        return UUID(str(value))
+
+    if isinstance(col_type, Numeric):
+        return Decimal(str(value))
+
+    if isinstance(col_type, SADate):
+        if isinstance(value, date) and not isinstance(value, datetime):
+            return value
+        if isinstance(value, datetime):
+            return value.date()
+        return date.fromisoformat(str(value)[:10])
+
+    if isinstance(col_type, TIMESTAMP):
+        if isinstance(value, datetime):
+            return value
+        date_text = str(value).strip()
+        if date_text.endswith("Z"):
+            date_text = f"{date_text[:-1]}+00:00"
+        return datetime.fromisoformat(date_text)
+
+    if isinstance(col_type, Integer):
+        return int(value)
+
+    if isinstance(col_type, Boolean):
+        if isinstance(value, bool):
+            return value
+        if isinstance(value, str):
+            lowered = value.strip().lower()
+            if lowered in {"true", "1", "yes", "si", "sí"}:
+                return True
+            if lowered in {"false", "0", "no"}:
+                return False
+        return bool(value)
+
+    if isinstance(col_type, (String,)):
+        return str(value)
+
+    if isinstance(col_type, JSONB):
+        return value
+
+    return value
+
+
+def _normalize_record(model: Any, raw_record: Any) -> dict[str, Any]:
+    if not isinstance(raw_record, dict):
+        raise ValueError("Cada fila del backup debe ser un objeto JSON")
+
+    normalized: dict[str, Any] = {}
+    for column in model.__table__.columns:
+        if column.name in raw_record:
+            normalized[column.name] = _coerce_value(column, raw_record[column.name])
+    return normalized
 
 
 @router.get("", response_model=ProductListOut)
@@ -58,6 +151,125 @@ def export_csv(db: Session = Depends(get_db), _: str = Depends(get_current_user)
         writer.writerow([p.id, p.set_number, p.name, p.theme, p.condition, p.purchase_price, p.quantity, p.availability])
     output.seek(0)
     return StreamingResponse(output, media_type="text/csv", headers={"Content-Disposition": "attachment; filename=inventario.csv"})
+
+
+@router.get("/export-all")
+def export_all_data(db: Session = Depends(get_db), _: str = Depends(get_current_user)):
+    """Exporta todas las tablas de negocio y sus datos en un único JSON."""
+    payload = {
+        "format": BACKUP_FORMAT,
+        "exported_at": datetime.utcnow().isoformat() + "Z",
+        "tables": {
+            table_name: [_model_to_record(row) for row in db.query(model).all()]
+            for table_name, model in BACKUP_MODELS.items()
+        },
+    }
+
+    output = io.StringIO()
+    json.dump(payload, output, ensure_ascii=False, indent=2)
+    output.seek(0)
+
+    filename = f"legomarkal_backup_{datetime.utcnow().date().isoformat()}.json"
+    return StreamingResponse(
+        output,
+        media_type="application/json",
+        headers={"Content-Disposition": f"attachment; filename={filename}"},
+    )
+
+
+@router.post("/import-all")
+def import_all_data(file: UploadFile = File(...), db: Session = Depends(get_db), _: str = Depends(get_current_user)):
+    """Importa un backup JSON completo y reemplaza los datos existentes."""
+    try:
+        raw_content = file.file.read()
+        payload = json.loads(raw_content.decode("utf-8-sig"))
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail="El archivo no es un JSON válido") from exc
+
+    if payload.get("format") != BACKUP_FORMAT:
+        raise HTTPException(status_code=400, detail="Formato de backup no compatible")
+
+    tables = payload.get("tables")
+    if not isinstance(tables, dict):
+        raise HTTPException(status_code=400, detail="El backup no contiene el bloque 'tables'")
+
+    missing_tables = [name for name in BACKUP_MODELS if name not in tables]
+    if missing_tables:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Faltan tablas requeridas en el backup: {', '.join(missing_tables)}",
+        )
+
+    try:
+        removed = {
+            "market_prices": db.query(MarketPrice).delete(synchronize_session=False),
+            "price_alerts": db.query(PriceAlert).delete(synchronize_session=False),
+            "portfolio_daily_snapshots": db.query(PortfolioDailySnapshot).delete(synchronize_session=False),
+            "products": db.query(Product).delete(synchronize_session=False),
+        }
+
+        products_data = tables.get("products") or []
+        market_prices_data = tables.get("market_prices") or []
+        price_alerts_data = tables.get("price_alerts") or []
+        snapshots_data = tables.get("portfolio_daily_snapshots") or []
+
+        if not all(isinstance(chunk, list) for chunk in [products_data, market_prices_data, price_alerts_data, snapshots_data]):
+            raise ValueError("Cada tabla del backup debe ser un array JSON")
+
+        for row in products_data:
+            db.add(Product(**_normalize_record(Product, row)))
+        db.flush()
+
+        for row in market_prices_data:
+            db.add(MarketPrice(**_normalize_record(MarketPrice, row)))
+
+        for row in price_alerts_data:
+            db.add(PriceAlert(**_normalize_record(PriceAlert, row)))
+
+        for row in snapshots_data:
+            db.add(PortfolioDailySnapshot(**_normalize_record(PortfolioDailySnapshot, row)))
+
+        db.commit()
+        inserted = {
+            "products": len(products_data),
+            "market_prices": len(market_prices_data),
+            "price_alerts": len(price_alerts_data),
+            "portfolio_daily_snapshots": len(snapshots_data),
+        }
+
+        return {
+            "message": "Backup importado correctamente",
+            "removed": removed,
+            "inserted": inserted,
+        }
+    except ValueError as exc:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=f"No se pudo importar el backup: {exc}") from exc
+
+
+@router.post("/reset-all")
+def reset_all_data(db: Session = Depends(get_db), _: str = Depends(get_current_user)):
+    """Elimina todos los datos de negocio en todas las tablas principales."""
+    deleted = {
+        "market_prices": db.query(MarketPrice).count(),
+        "price_alerts": db.query(PriceAlert).count(),
+        "portfolio_daily_snapshots": db.query(PortfolioDailySnapshot).count(),
+        "products": db.query(Product).count(),
+    }
+
+    db.query(MarketPrice).delete(synchronize_session=False)
+    db.query(PriceAlert).delete(synchronize_session=False)
+    db.query(PortfolioDailySnapshot).delete(synchronize_session=False)
+    db.query(Product).delete(synchronize_session=False)
+    db.commit()
+
+    return {
+        "message": "Datos reseteados correctamente",
+        "deleted": deleted,
+    }
 
 
 @router.get("/{product_id}", response_model=ProductOut)

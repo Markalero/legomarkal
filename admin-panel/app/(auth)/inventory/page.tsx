@@ -2,7 +2,7 @@
 "use client";
 import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { Plus, Download, Upload, SlidersHorizontal, PlusCircle, X } from "lucide-react";
+import { Plus, Download, Upload, SlidersHorizontal, PlusCircle, X, Trash2, AlertTriangle } from "lucide-react";
 import { Header } from "@/components/layout/Header";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
@@ -19,6 +19,7 @@ import type { ProductListOut, ProductFilters } from "@/types";
 
 const DEFAULT_FILTERS: ProductFilters = { page: 1, size: 20 };
 const PURCHASE_SOURCES_KEY = "legomarkal_purchase_sources";
+const RESET_WAIT_MS = 10_000;
 
 export default function InventoryPage() {
   const router = useRouter();
@@ -30,6 +31,10 @@ export default function InventoryPage() {
   const [errorDetails, setErrorDetails] = useState<string | null>(null);
   const [importOpen, setImportOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [resetOpen, setResetOpen] = useState(false);
+  const [resetProgress, setResetProgress] = useState(0);
+  const [resetSecondsLeft, setResetSecondsLeft] = useState(10);
+  const [resetLoading, setResetLoading] = useState(false);
   const [purchaseSources, setPurchaseSources] = useState<string[]>([]);
   const [newPurchaseSource, setNewPurchaseSource] = useState("");
   const { refreshing: refreshingAll, progress: refreshProgress, status: refreshStatus, setProgress, setStatus, begin, end, startPredictiveProgress, stopPredictorRef } = useRefreshProgress();
@@ -63,6 +68,31 @@ export default function InventoryPage() {
       setPurchaseSources(JSON.parse(storedSources));
     }
   }, []);
+
+  useEffect(() => {
+    if (!resetOpen) {
+      setResetProgress(0);
+      setResetSecondsLeft(10);
+      return;
+    }
+
+    const startedAt = Date.now();
+    const timerId = window.setInterval(() => {
+      const elapsed = Date.now() - startedAt;
+      const boundedElapsed = Math.min(elapsed, RESET_WAIT_MS);
+      const progressPct = Math.round((boundedElapsed / RESET_WAIT_MS) * 100);
+      setResetProgress(progressPct);
+      setResetSecondsLeft(Math.max(0, Math.ceil((RESET_WAIT_MS - boundedElapsed) / 1000)));
+
+      if (boundedElapsed >= RESET_WAIT_MS) {
+        window.clearInterval(timerId);
+      }
+    }, 100);
+
+    return () => window.clearInterval(timerId);
+  }, [resetOpen]);
+
+  const resetReady = resetProgress >= 100;
 
   async function handleRefreshAllPrices() {
     begin();
@@ -111,17 +141,38 @@ export default function InventoryPage() {
 
   async function handleExport() {
     try {
-      const blob = await productsApi.exportCsv();
+      const blob = await productsApi.exportAllData();
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `inventario_${new Date().toISOString().split("T")[0]}.csv`;
+      a.download = `legomarkal_backup_${new Date().toISOString().split("T")[0]}.json`;
       a.click();
       URL.revokeObjectURL(url);
     } catch (e: unknown) {
-      const uiError = toUiError(e, "No se pudo exportar el CSV.");
+      const uiError = toUiError(e, "No se pudo exportar el backup completo.");
       setError(uiError.message);
       setErrorDetails(uiError.details ?? null);
+    }
+  }
+
+  async function handleResetAllData() {
+    if (!resetReady) return;
+
+    setResetLoading(true);
+    try {
+      await productsApi.resetAllData();
+      setResetOpen(false);
+      setSettingsOpen(false);
+
+      const nextFilters = { ...DEFAULT_FILTERS };
+      setFilters(nextFilters);
+      await load(nextFilters);
+    } catch (e: unknown) {
+      const uiError = toUiError(e, "No se pudieron resetear los datos.");
+      setError(uiError.message);
+      setErrorDetails(uiError.details ?? null);
+    } finally {
+      setResetLoading(false);
     }
   }
 
@@ -233,7 +284,7 @@ export default function InventoryPage() {
       <Modal
         open={importOpen}
         onClose={() => setImportOpen(false)}
-        title="Importar productos desde CSV / Excel"
+        title="Restaurar copia completa desde JSON"
       >
         <BulkImport
           onSuccess={() => {
@@ -255,13 +306,27 @@ export default function InventoryPage() {
             <div className="flex flex-wrap gap-2">
               <Button variant="secondary" size="sm" onClick={handleExport}>
                 <Download className="h-4 w-4" />
-                Exportar CSV
+                Exportar backup (JSON)
               </Button>
               <Button variant="secondary" size="sm" onClick={() => { setSettingsOpen(false); setImportOpen(true); }}>
                 <Upload className="h-4 w-4" />
-                Importar CSV / Excel
+                Importar backup (JSON)
+              </Button>
+              <Button
+                variant="danger"
+                size="sm"
+                onClick={() => {
+                  setSettingsOpen(false);
+                  setResetOpen(true);
+                }}
+              >
+                <Trash2 className="h-4 w-4" />
+                Resetear todos los datos
               </Button>
             </div>
+            <p className="text-xs text-text-muted">
+              La exportación incluye todas las tablas de negocio. La importación acepta exclusivamente ese JSON.
+            </p>
           </div>
           <div className="border-t border-border" />
           <div className="space-y-3">
@@ -293,6 +358,55 @@ export default function InventoryPage() {
                 </button>
               ))}
             </div>
+          </div>
+        </div>
+      </Modal>
+
+      <Modal
+        open={resetOpen}
+        onClose={() => {
+          if (!resetLoading) setResetOpen(false);
+        }}
+        title="Confirmación de reseteo total"
+        className="max-w-lg"
+      >
+        <div className="space-y-4">
+          <div className="rounded-lg border border-status-error/40 bg-status-error/10 p-3 text-sm text-status-error">
+            <p className="flex items-start gap-2 font-medium">
+              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+              Esta acción eliminará todos los datos de inventario, precios, alertas e histórico diario.
+            </p>
+            <p className="mt-2 text-xs text-text-secondary">
+              Espera 10 segundos para habilitar la confirmación final. Es una operación irreversible.
+            </p>
+          </div>
+
+          <div>
+            <div className="h-2 w-full overflow-hidden rounded-full bg-bg-elevated">
+              <div
+                className="h-full bg-status-warning transition-all"
+                style={{ width: `${resetProgress}%` }}
+              />
+            </div>
+            <p className="mt-2 text-xs text-text-muted">
+              {resetReady
+                ? "Tiempo de espera completado. Ya puedes confirmar el reseteo."
+                : `Confirma disponible en ${resetSecondsLeft}s`}
+            </p>
+          </div>
+
+          <div className="flex justify-end gap-2">
+            <Button variant="ghost" onClick={() => setResetOpen(false)} disabled={resetLoading}>
+              Cancelar
+            </Button>
+            <Button
+              variant="danger"
+              onClick={handleResetAllData}
+              disabled={!resetReady || resetLoading}
+              loading={resetLoading}
+            >
+              Sí, resetear todo
+            </Button>
           </div>
         </div>
       </Modal>

@@ -1,6 +1,6 @@
 # README_CONTEXT
  
-Fecha de actualización: 2026-04-12 (auditoria y mejoras frontend: accesibilidad base, errores UX, tablas semanticas, sidebar responsive y robustez de modales)
+Fecha de actualización: 2026-04-12 (auditoria y mejoras frontend: accesibilidad base, errores UX, tablas semanticas, sidebar responsive, robustez de modales y backup/reset global de datos)
 
 ---
 
@@ -14,6 +14,10 @@ Fecha de actualización: 2026-04-12 (auditoria y mejoras frontend: accesibilidad
 - **Refactor UX**: Reemplazo de `confirm()` por `ConfirmModal`, adición de `backHref/backLabel` en `Header`, lightbox de imagen en `InventoryTable`, auto-guardado de fuentes de compra en nuevo producto.
 - **Estética / Animaciones**: admin-panel/tailwind.config.ts añade keyframes y clases `fade-in`, `slide-up-fade`, `zoom-in-fade`; múltiples páginas usan `animate-slide-up-fade`.
 - **Visor de imágenes mejorado**: nuevo componente reutilizable `admin-panel/components/ui/Lightbox.tsx` aplicado en inventario y subida de imágenes (`ImageUpload`) con controles centrados, teclado, miniaturas y cierre integrado en contenedor.
+- **Lightbox a ancho completo**: `admin-panel/components/ui/Lightbox.tsx` elimina el límite de ancho fijo y ocupa todo el viewport disponible para la imagen principal.
+- **Backup global de datos (JSON)**: backend añade `GET /products/export-all` y `POST /products/import-all` para exportar/importar la totalidad de tablas de negocio (`products`, `market_prices`, `price_alerts`, `portfolio_daily_snapshots`) en formato `legomarkal-backup-v1`.
+- **Reset total de datos**: backend añade `POST /products/reset-all`; frontend incorpora botón dedicado con advertencia, espera obligatoria de 10s y barra de progreso antes de permitir confirmar.
+- **Configuración de inventario**: botones de datos migrados de CSV/Excel a backup JSON completo (exportar/importar) para mantener consistencia de todas las tablas.
 - **Gráficas individuales más robustas (datos diarios)**: `admin-panel/app/(auth)/prices/page.tsx` combina `/market-prices/{id}/trend` con `/market-prices/{id}` para no perder muestras diarias existentes si el endpoint de tendencia llega incompleto.
 - **Bandas min/max curvas**: en `admin-panel/app/(auth)/prices/page.tsx` la zona sombreada y límites de variabilidad pasan de `linear` a `monotone`, alineándose con la curva de precios y evitando salidas visuales de umbral.
 

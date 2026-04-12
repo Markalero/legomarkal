@@ -1,11 +1,11 @@
-// Componente de importación masiva CSV/Excel con drag & drop
+// Componente de restauración de backup JSON con drag & drop
 "use client";
 import { useState, useRef } from "react";
 import { Upload, FileSpreadsheet, CheckCircle, AlertCircle } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { productsApi } from "@/lib/api-client";
 import { cn } from "@/lib/utils";
-import type { ImportResult } from "@/types";
+import type { FullDataImportResult } from "@/types";
 
 interface BulkImportProps {
   onSuccess: () => void;
@@ -14,7 +14,7 @@ interface BulkImportProps {
 export function BulkImport({ onSuccess }: BulkImportProps) {
   const [file, setFile] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
-  const [result, setResult] = useState<ImportResult | null>(null);
+  const [result, setResult] = useState<FullDataImportResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [dragging, setDragging] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -30,9 +30,9 @@ export function BulkImport({ onSuccess }: BulkImportProps) {
     setLoading(true);
     setError(null);
     try {
-      const res = await productsApi.bulkImport(file);
+      const res = await productsApi.importAllData(file);
       setResult(res);
-      if (res.created > 0) onSuccess();
+      onSuccess();
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Error al importar");
     } finally {
@@ -66,11 +66,11 @@ export function BulkImport({ onSuccess }: BulkImportProps) {
         <FileSpreadsheet className="h-10 w-10 text-text-muted" />
         <div className="text-center">
           <p className="text-sm text-text-secondary">
-            Arrastra un CSV o Excel aquí, o{" "}
+            Arrastra un archivo JSON aquí, o{" "}
             <span className="text-accent-lego">haz clic para seleccionar</span>
           </p>
           <p className="mt-1 text-xs text-text-muted">
-            Columnas: nombre, número_set, tema, condición, precio_compra, ubicación…
+            El archivo debe ser una exportación completa de LegoMarkal (formato JSON backup).
           </p>
         </div>
         {file && (
@@ -82,7 +82,7 @@ export function BulkImport({ onSuccess }: BulkImportProps) {
         <input
           ref={inputRef}
           type="file"
-          accept=".csv,.xlsx,.xls"
+          accept=".json,application/json"
           className="hidden"
           onChange={(e) => {
             const f = e.target.files?.[0];
@@ -100,7 +100,7 @@ export function BulkImport({ onSuccess }: BulkImportProps) {
           className="w-full"
         >
           <Upload className="h-4 w-4" />
-          Importar {file.name}
+          Restaurar backup {file.name}
         </Button>
       )}
 
@@ -109,22 +109,15 @@ export function BulkImport({ onSuccess }: BulkImportProps) {
         <div className="rounded-lg border border-border bg-bg-elevated p-4 space-y-2">
           <div className="flex items-center gap-2 text-status-success text-sm font-medium">
             <CheckCircle className="h-4 w-4" />
-            {result.created} producto{result.created !== 1 ? "s" : ""} importado
-            {result.created !== 1 ? "s" : ""} correctamente
+            {result.message}
           </div>
-          {result.errors.length > 0 && (
-            <div className="space-y-1">
-              <p className="text-xs text-status-warning font-medium flex items-center gap-1">
-                <AlertCircle className="h-3.5 w-3.5" />
-                {result.errors.length} error{result.errors.length !== 1 ? "es" : ""}:
-              </p>
-              {result.errors.map((err) => (
-                <p key={err.row} className="text-xs text-text-muted pl-5">
-                  Fila {err.row}: {err.message}
-                </p>
-              ))}
-            </div>
-          )}
+          <div className="grid gap-2 text-xs text-text-secondary sm:grid-cols-2">
+            {Object.entries(result.inserted).map(([table, count]) => (
+              <div key={table} className="rounded-md border border-border bg-bg-card px-2 py-1">
+                <span className="font-medium text-text-primary">{table}</span>: {count} importados
+              </div>
+            ))}
+          </div>
         </div>
       )}
 

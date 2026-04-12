@@ -47,13 +47,13 @@ export function Lightbox({ images, initialIndex = 0, open, onClose, showThumbnai
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-6"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-1 sm:p-2 md:p-4"
       role="dialog"
       aria-modal="true"
       onClick={onClose}
     >
       <div
-        className="relative w-full max-w-6xl max-h-[90vh]"
+        className="relative h-full w-full max-h-[96vh]"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Contenedor de controles */}
@@ -88,8 +88,8 @@ export function Lightbox({ images, initialIndex = 0, open, onClose, showThumbnai
         </button>
 
         {/* Imagen principal */}
-        <div className="relative mx-auto h-[72vh] w-full rounded-lg bg-black/90 shadow-lg animate-zoom-in-fade overflow-hidden">
-          <Image src={images[index]} alt={`Imagen ${index + 1}`} fill className="object-contain bg-black" sizes="100vw" />
+        <div className="relative mx-auto h-[calc(100vh-8rem)] w-full rounded-lg bg-black/90 shadow-lg animate-zoom-in-fade overflow-hidden">
+          <Image src={images[index]} alt={`Imagen ${index + 1}`} fill className="object-cover bg-black" sizes="100vw" />
         </div>
 
         {/* Acciones rápidas */}

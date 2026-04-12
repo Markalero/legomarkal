@@ -209,3 +209,14 @@ export interface ImportResult {
   created: number;
   errors: Array<{ row: number; message: string }>;
 }
+
+export interface FullDataImportResult {
+  message: string;
+  removed: Record<string, number>;
+  inserted: Record<string, number>;
+}
+
+export interface FullDataResetResult {
+  message: string;
+  deleted: Record<string, number>;
+}

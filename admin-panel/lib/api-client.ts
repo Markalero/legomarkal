@@ -20,6 +20,8 @@ import type {
   RealProfitSummary,
   ProductPriceHistory,
   ImportResult,
+  FullDataImportResult,
+  FullDataResetResult,
 } from "@/types";
 
 const BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
@@ -119,6 +121,15 @@ export const productsApi = {
     return res.blob();
   },
 
+  exportAllData: async (): Promise<Blob> => {
+    const token = getToken();
+    const res = await fetch(`${BASE_URL}/products/export-all`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    });
+    if (!res.ok) throw new Error(`Error ${res.status}`);
+    return res.blob();
+  },
+
   bulkImport: (file: File) => {
     const form = new FormData();
     form.append("file", file);
@@ -127,6 +138,20 @@ export const productsApi = {
       body: form,
     });
   },
+
+  importAllData: (file: File) => {
+    const form = new FormData();
+    form.append("file", file);
+    return request<FullDataImportResult>("/products/import-all", {
+      method: "POST",
+      body: form,
+    });
+  },
+
+  resetAllData: () =>
+    request<FullDataResetResult>("/products/reset-all", {
+      method: "POST",
+    }),
 
   uploadSaleReceipts: (id: string, files: File[]) => {
     const form = new FormData();
