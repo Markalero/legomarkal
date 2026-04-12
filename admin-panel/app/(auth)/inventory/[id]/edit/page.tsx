@@ -6,6 +6,7 @@ import { Header } from "@/components/layout/Header";
 import { Card } from "@/components/ui/Card";
 import { ProductForm, type ProductFormData } from "@/components/product/ProductForm";
 import { productsApi } from "@/lib/api-client";
+import { useToast } from "@/lib/toast-context";
 import type { Product } from "@/types";
 
 const PURCHASE_SOURCES_KEY = "legomarkal_purchase_sources";
@@ -19,6 +20,7 @@ export default function EditProductPage({ params }: Props) {
   const [product, setProduct] = useState<Product | null>(null);
   const [purchaseSources, setPurchaseSources] = useState<string[]>([]);
   const [themeSuggestions, setThemeSuggestions] = useState<string[]>([]);
+  const toast = useToast();
 
   useEffect(() => {
     Promise.all([productsApi.get(params.id), productsApi.list({ size: 200 })]).then(([p, list]) => {
@@ -36,6 +38,7 @@ export default function EditProductPage({ params }: Props) {
       year_released: data.year_released === "" ? undefined : data.year_released,
       purchase_price: data.purchase_price === "" ? undefined : data.purchase_price,
     });
+    toast.success("Cambios guardados");
     router.push(`/inventory/${params.id}`);
   }
 
