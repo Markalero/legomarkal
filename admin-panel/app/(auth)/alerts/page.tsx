@@ -10,6 +10,7 @@ import { Badge } from "@/components/ui/Badge";
 import { ConfirmModal } from "@/components/ui/ConfirmModal";
 import { alertsApi, productsApi } from "@/lib/api-client";
 import { formatCurrency, formatDate, toUiError } from "@/lib/utils";
+import { useToast } from "@/lib/toast-context";
 import type { PriceAlert, Product } from "@/types";
 
 export default function AlertsPage() {
@@ -24,6 +25,7 @@ export default function AlertsPage() {
   const [alertType, setAlertType] = useState<"PRICE_ABOVE" | "PRICE_BELOW" | "PRICE_CHANGE_PCT">("PRICE_BELOW");
   const [thresholdValue, setThresholdValue] = useState("");
   const productNameById = useMemo(() => new Map(products.map((p) => [p.id, p])), [products]);
+  const toast = useToast();
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -73,10 +75,12 @@ export default function AlertsPage() {
       await alertsApi.delete(id);
       setAlerts((prev) => prev.filter((a) => a.id !== id));
       setDeleteCandidate(null);
+      toast.success("Alerta eliminada");
     } catch (e: unknown) {
       const uiError = toUiError(e, "No se pudo eliminar la alerta.");
       setError(uiError.message);
       setErrorDetails(uiError.details ?? null);
+      toast.error(uiError.message);
     }
   }
 
@@ -93,10 +97,12 @@ export default function AlertsPage() {
       });
       setAlerts((prev) => [created, ...prev]);
       setThresholdValue("");
+      toast.success("Alerta creada correctamente");
     } catch (e: unknown) {
       const uiError = toUiError(e, "No se pudo crear la alerta.");
       setError(uiError.message);
       setErrorDetails(uiError.details ?? null);
+      toast.error(uiError.message);
     } finally {
       setCreating(false);
     }
