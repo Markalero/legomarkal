@@ -1,6 +1,6 @@
 # README_CONTEXT
  
-Fecha de actualización: 2026-04-12 (auditoria y mejoras frontend: accesibilidad base, errores UX, tablas semanticas, sidebar responsive, robustez de modales y backup/reset global de datos)
+Fecha de actualización: 2026-04-12 (sistema de notificaciones flotantes toast: ToastContext/ToastProvider/useToast/useToastState en lib/toast-context.tsx, Toast.tsx y ToastContainer.tsx en components/ui; corrección bug exportación backup (anchor sin DOM + revokeObjectURL síncrono); progreso predictivo por fases para descarga desde Supabase; toasts de éxito/error en alertas, productos, importación y reset)
 
 ---
 
@@ -156,7 +156,9 @@ LegoMarkal/
 │  │  │  ├─ Badge.tsx            # Badges de estado: success, warning, error, info, neutral
 │  │  │  ├─ Card.tsx             # Contenedor card con CardHeader y CardTitle
 │  │  │  ├─ ChartRangeSelector.tsx # Selector de rango temporal para gráficas (1m/3m/6m/all)
-│  │  │  └─ Modal.tsx            # Modal con overlay, cierre Escape/click
+│  │  │  ├─ Modal.tsx            # Modal con overlay, cierre Escape/click
+│  │  │  ├─ Toast.tsx            # Componente individual de notificación flotante (success/error/info/warning/progress)
+│  │  │  └─ ToastContainer.tsx   # Contenedor fixed bottom-right que renderiza la cola de toasts
 │  │  ├─ layout/
 │  │  │  ├─ Sidebar.tsx          # Navegación principal + logout
 │  │  │  └─ Header.tsx           # Cabecera de página con título y acciones
@@ -175,6 +177,7 @@ LegoMarkal/
 │  ├─ lib/
 │  │  ├─ api-client.ts           # Wrapper fetch → FastAPI (auth, products, prices, alerts, dashboard)
 │  │  ├─ auth.ts                 # Token JWT en localStorage + verificación expiración
+│  │  ├─ toast-context.tsx       # ToastContext, ToastProvider, useToast (disparar), useToastState (leer)
 │  │  └─ utils.ts                # formatCurrency, formatPct, formatDate, conditionLabel, calcMarginPct, cn
 │  ├─ types/
 │  │  └─ index.ts                # Interfaces TypeScript: Product, MarketPrice, PriceAlert, Dashboard...
