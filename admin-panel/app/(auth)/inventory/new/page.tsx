@@ -5,13 +5,11 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useRouter } from "next/navigation";
-import { ArrowLeft } from "lucide-react";
 import { Header } from "@/components/layout/Header";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { productsApi } from "@/lib/api-client";
-import Link from "next/link";
 
 const PURCHASE_SOURCES_KEY = "legomarkal_purchase_sources";
 
@@ -67,6 +65,16 @@ export default function NewProductPage() {
         purchase_source: data.purchase_source.trim(),
         notes: data.notes || null,
       });
+
+      // Auto-guardar la fuente de compra si es nueva
+      const source = data.purchase_source.trim();
+      if (source && !purchaseSources.includes(source)) {
+        const updated = Array.from(new Set([...purchaseSources, source])).sort((a, b) =>
+          a.localeCompare(b)
+        );
+        localStorage.setItem(PURCHASE_SOURCES_KEY, JSON.stringify(updated));
+      }
+
       router.push("/inventory");
     } catch (error: unknown) {
       setSubmitError(error instanceof Error ? error.message : "No se pudo crear el producto");
@@ -81,16 +89,9 @@ export default function NewProductPage() {
       <Header
         title="Nuevo producto"
         description="Añadir artículo al inventario"
-        actions={
-          <Link href="/inventory">
-            <Button variant="ghost" size="sm">
-              <ArrowLeft className="h-4 w-4" />
-              Volver
-            </Button>
-          </Link>
-        }
+        backHref="/inventory"
       />
-      <div className="flex-1 p-6">
+      <div className="flex-1 p-6 animate-slide-up-fade">
         <Card className="max-w-3xl">
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
             {submitError && (

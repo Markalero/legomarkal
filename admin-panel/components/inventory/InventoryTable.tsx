@@ -1,10 +1,9 @@
-// Tabla densa de inventario con paginación server-side y navegación a ficha
+// Tabla densa de inventario con paginación server-side, lightbox de imagen y navegación a ficha
 "use client";
-import Link from "next/link";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { ChevronLeft, ChevronRight, ExternalLink } from "lucide-react";
+import { ChevronLeft, ChevronRight, X } from "lucide-react";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { SaleModal } from "@/components/inventory/SaleModal";
@@ -64,6 +63,8 @@ export function InventoryTable({ data, onPageChange, onToggleAvailability, onSal
 
   // Producto objetivo para el modal de venta; null = modal cerrado
   const [sellTarget, setSellTarget] = useState<SellTarget | null>(null);
+  // URL de imagen en el lightbox; null = cerrado
+  const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
 
   function resolveImageUrl(url: string) {
     if (url.startsWith("http://") || url.startsWith("https://")) return url;
@@ -85,6 +86,29 @@ export function InventoryTable({ data, onPageChange, onToggleAvailability, onSal
         onCancel={() => setSellTarget(null)}
       />
 
+      {/* Lightbox de imagen — cierra con Escape o click en overlay */}
+      {lightboxUrl && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 p-4 animate-fade-in"
+          onClick={() => setLightboxUrl(null)}
+        >
+          <button
+            type="button"
+            onClick={() => setLightboxUrl(null)}
+            className="absolute right-4 top-4 rounded-full bg-black/70 p-2 text-white hover:bg-black/90"
+            title="Cerrar"
+          >
+            <X className="h-5 w-5" />
+          </button>
+          <div
+            className="relative h-[80vh] w-full max-w-3xl animate-zoom-in-fade"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <Image src={lightboxUrl} alt="Vista ampliada" fill className="object-contain" sizes="100vw" />
+          </div>
+        </div>
+      )}
+
       <div className="flex flex-col">
         {/* Tabla */}
         <div className="overflow-x-auto">
@@ -101,7 +125,6 @@ export function InventoryTable({ data, onPageChange, onToggleAvailability, onSal
                 <th className="px-4 py-3 text-right">Mercado</th>
                 <th className="px-4 py-3 text-right">Margen</th>
                 <th className="px-4 py-3">Disponibilidad</th>
-                <th className="px-4 py-3 w-10" />
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
@@ -142,9 +165,17 @@ export function InventoryTable({ data, onPageChange, onToggleAvailability, onSal
                     </td>
                     <td className="px-4 py-3">
                       {product.images?.[0] ? (
-                        <div className="relative h-10 w-10 overflow-hidden rounded-md border border-border">
-                          <Image src={resolveImageUrl(product.images[0])} alt={product.name} fill className="object-cover" />
-                        </div>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setLightboxUrl(resolveImageUrl(product.images![0]));
+                          }}
+                          className="relative h-10 w-10 overflow-hidden rounded-md border border-border transition-opacity hover:opacity-80"
+                          title="Ver imagen"
+                        >
+                          <Image src={resolveImageUrl(product.images[0])} alt={product.name} fill className="object-cover" sizes="40px" />
+                        </button>
                       ) : (
                         <span className="text-xs text-text-muted">—</span>
                       )}
@@ -207,14 +238,6 @@ export function InventoryTable({ data, onPageChange, onToggleAvailability, onSal
                       >
                         {isSold ? "Vendido" : "Disponible"}
                       </Button>
-                    </td>
-                    <td className="px-4 py-3">
-                      <Link
-                        href={`/inventory/${product.id}`}
-                        onClick={(e) => e.stopPropagation()}
-                      >
-                        <ExternalLink className="h-4 w-4 text-text-muted transition-colors hover:text-accent-lego" />
-                      </Link>
                     </td>
                   </tr>
                 );

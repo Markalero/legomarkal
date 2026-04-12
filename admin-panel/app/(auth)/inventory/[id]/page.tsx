@@ -3,11 +3,12 @@
 import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft, Edit, Trash2, Tag, BellPlus } from "lucide-react";
+import { Edit, Trash2, Tag, BellPlus } from "lucide-react";
 import { Header } from "@/components/layout/Header";
 import { Card, CardHeader, CardTitle } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { RefreshPricesButton } from "@/components/ui/RefreshPricesButton";
+import { ConfirmModal } from "@/components/ui/ConfirmModal";
 import { Badge } from "@/components/ui/Badge";
 import { SaleModal } from "@/components/inventory/SaleModal";
 import { SaleReceiptList } from "@/components/product/SaleReceiptList";
@@ -41,6 +42,7 @@ export default function ProductDetailPage({ params }: Props) {
   const [alerts, setAlerts] = useState<PriceAlert[]>([]);
   const [scraping, setScraping] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
   const [creatingAlert, setCreatingAlert] = useState(false);
   const [alertType, setAlertType] = useState<"PRICE_ABOVE" | "PRICE_BELOW" | "PRICE_CHANGE_PCT">("PRICE_BELOW");
   const [alertThreshold, setAlertThreshold] = useState<string>("");
@@ -70,7 +72,6 @@ export default function ProductDetailPage({ params }: Props) {
   }
 
   async function handleDelete() {
-    if (!confirm("¿Eliminar este producto? Esta acción no se puede deshacer fácilmente.")) return;
     setDeleting(true);
     try {
       await productsApi.delete(params.id);
@@ -165,19 +166,11 @@ export default function ProductDetailPage({ params }: Props) {
       <Header
         title={product.name}
         description={product.set_number ? `Set ${product.set_number}` : undefined}
-        actions={
-          <div className="flex gap-2">
-            <Link href="/inventory">
-              <Button variant="ghost" size="sm">
-                <ArrowLeft className="h-4 w-4" />
-              </Button>
-            </Link>
-            <RefreshPricesButton loading={scraping} onClick={handleScrape} />
-          </div>
-        }
+        backHref="/inventory"
+        actions={<RefreshPricesButton loading={scraping} onClick={handleScrape} />}
       />
 
-      <div className="flex-1 space-y-6 p-6">
+      <div className="flex-1 space-y-6 p-6 animate-slide-up-fade">
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
           {/* Columna izquierda: datos */}
           <div className="space-y-6 lg:col-span-2">
@@ -199,7 +192,7 @@ export default function ProductDetailPage({ params }: Props) {
                       Editar
                     </Button>
                   </Link>
-                  <Button variant="danger" size="sm" onClick={handleDelete} loading={deleting}>
+                  <Button variant="danger" size="sm" onClick={() => setConfirmDeleteOpen(true)} loading={deleting}>
                     <Trash2 className="h-4 w-4" />
                     Eliminar
                   </Button>
@@ -372,7 +365,9 @@ export default function ProductDetailPage({ params }: Props) {
                         {ALERT_LABELS[alert.alert_type] ?? alert.alert_type}
                       </span>
                       <span className="text-text-primary font-medium">
-                        {formatCurrency(alert.threshold_value)}
+                        {alert.alert_type === "PRICE_CHANGE_PCT"
+                          ? `${alert.threshold_value}%`
+                          : formatCurrency(alert.threshold_value)}
                       </span>
                     </li>
                   ))}
@@ -400,6 +395,19 @@ export default function ProductDetailPage({ params }: Props) {
           </div>
         </div>
       </div>
+
+      {/* Modal de confirmación de eliminación */}
+      <ConfirmModal
+        open={confirmDeleteOpen}
+        title="Eliminar producto"
+        message="¿Eliminar este producto? Esta acción no se puede deshacer fácilmente."
+        confirmLabel="Eliminar"
+        onConfirm={() => {
+          setConfirmDeleteOpen(false);
+          handleDelete();
+        }}
+        onCancel={() => setConfirmDeleteOpen(false)}
+      />
 
       {/* Modal de venta — fuera del layout principal para evitar problemas de z-index */}
       <SaleModal

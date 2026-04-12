@@ -1,8 +1,19 @@
 # README_CONTEXT
-
-Fecha de actualización: 2026-04-12 (auto-migración Alembic en arranque backend para evitar desalineación código/BBDD)
+ 
+Fecha de actualización: 2026-04-12 (auditoría y mejoras frontend: progreso de refresco, modales de confirmación, lightbox de imágenes, hook useRefreshProgress, animaciones Tailwind)
 
 ---
+
+## Últimos cambios detectados
+
+- **Fecha**: 2026-04-12 — resumen de cambios frontend recientes.
+- **Componentes añadidos**: admin-panel/components/ui/ConfirmModal.tsx (modal de confirmación) y admin-panel/components/ui/RefreshProgressOverlay.tsx (overlay de progreso).
+- **Hook añadido**: admin-panel/lib/useRefreshProgress.ts — centraliza lógica de progreso predictivo y control de estado de refresco.
+- **Páginas actualizadas**: admin-panel/app/(auth)/dashboard/page.tsx, admin-panel/app/(auth)/inventory/page.tsx, admin-panel/app/(auth)/prices/page.tsx, admin-panel/app/(auth)/inventory/[id]/page.tsx, admin-panel/app/(auth)/inventory/new/page.tsx, admin-panel/app/(auth)/alerts/page.tsx — migradas a `useRefreshProgress` y `RefreshProgressOverlay`.
+- **Refactor UX**: Reemplazo de `confirm()` por `ConfirmModal`, adición de `backHref/backLabel` en `Header`, lightbox de imagen en `InventoryTable`, auto-guardado de fuentes de compra en nuevo producto.
+- **Estética / Animaciones**: admin-panel/tailwind.config.ts añade keyframes y clases `fade-in`, `slide-up-fade`, `zoom-in-fade`; múltiples páginas usan `animate-slide-up-fade`.
+
+Se recomienda revisar las nuevas piezas UI y el hook `useRefreshProgress` para integrarlas en futuras vistas que requieran feedback de operaciones largas.
 
 ## 1) Resumen general rápido
 

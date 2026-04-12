@@ -2,11 +2,8 @@
 "use client";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import Link from "next/link";
-import { ArrowLeft } from "lucide-react";
 import { Header } from "@/components/layout/Header";
 import { Card } from "@/components/ui/Card";
-import { Button } from "@/components/ui/Button";
 import { ProductForm, type ProductFormData } from "@/components/product/ProductForm";
 import { productsApi } from "@/lib/api-client";
 import type { Product } from "@/types";
@@ -55,16 +52,10 @@ export default function EditProductPage({ params }: Props) {
       <Header
         title="Editar producto"
         description={product.name}
-        actions={
-          <Link href={`/inventory/${params.id}`}>
-            <Button variant="ghost" size="sm">
-              <ArrowLeft className="h-4 w-4" />
-              Cancelar
-            </Button>
-          </Link>
-        }
+        backHref={`/inventory/${params.id}`}
+        backLabel="Cancelar"
       />
-      <div className="flex-1 p-6">
+      <div className="flex-1 p-6 animate-slide-up-fade">
         <Card className="max-w-3xl">
           <ProductForm
             defaultValues={product}

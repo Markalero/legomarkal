@@ -1,6 +1,7 @@
 // Página de gestión de alertas de precio activas
 "use client";
 import { useEffect, useState, useCallback } from "react";
+import { useMemo } from "react";
 import { Trash2, Bell, BellPlus } from "lucide-react";
 import { Header } from "@/components/layout/Header";
 import { Card } from "@/components/ui/Card";
@@ -18,7 +19,7 @@ export default function AlertsPage() {
   const [productId, setProductId] = useState("");
   const [alertType, setAlertType] = useState<"PRICE_ABOVE" | "PRICE_BELOW" | "PRICE_CHANGE_PCT">("PRICE_BELOW");
   const [thresholdValue, setThresholdValue] = useState("");
-  const productNameById = new Map(products.map((p) => [p.id, p]));
+  const productNameById = useMemo(() => new Map(products.map((p) => [p.id, p])), [products]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -91,7 +92,7 @@ export default function AlertsPage() {
         description={`${alerts.filter((a) => a.is_active).length} alertas activas`}
       />
 
-      <div className="flex-1 p-6">
+      <div className="flex-1 p-6 animate-slide-up-fade">
         <Card className="mb-6 border-accent-lego/30 bg-accent-lego/5">
           <div className="mb-3 flex items-center gap-2">
             <BellPlus className="h-4 w-4 text-accent-lego" />

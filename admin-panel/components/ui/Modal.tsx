@@ -36,7 +36,7 @@ export function Modal({ open, onClose, title, children, className }: ModalProps)
       {/* Contenido */}
       <div
         className={cn(
-          "relative z-10 w-full max-w-lg rounded-xl border border-border bg-bg-card shadow-2xl",
+          "relative z-10 w-full max-w-lg rounded-xl border border-border bg-bg-card shadow-2xl animate-zoom-in-fade",
           className
         )}
       >

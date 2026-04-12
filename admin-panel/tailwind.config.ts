@@ -33,6 +33,25 @@ const config: Config = {
       fontFamily: {
         sans: ["Inter", "system-ui", "sans-serif"],
       },
+      keyframes: {
+        "fade-in": {
+          from: { opacity: "0" },
+          to: { opacity: "1" },
+        },
+        "slide-up-fade": {
+          from: { opacity: "0", transform: "translateY(12px)" },
+          to: { opacity: "1", transform: "translateY(0)" },
+        },
+        "zoom-in-fade": {
+          from: { opacity: "0", transform: "scale(0.96)" },
+          to: { opacity: "1", transform: "scale(1)" },
+        },
+      },
+      animation: {
+        "fade-in": "fade-in 0.2s ease-out both",
+        "slide-up-fade": "slide-up-fade 0.25s ease-out both",
+        "zoom-in-fade": "zoom-in-fade 0.15s ease-out both",
+      },
     },
   },
   plugins: [],

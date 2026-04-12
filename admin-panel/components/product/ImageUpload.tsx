@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import Image from "next/image";
 import { ChevronLeft, ChevronRight, Star, Upload, X } from "lucide-react";
 import { Button } from "@/components/ui/Button";
+import { ConfirmModal } from "@/components/ui/ConfirmModal";
 import { getToken } from "@/lib/auth";
 import { cn } from "@/lib/utils";
 import { productsApi } from "@/lib/api-client";
@@ -21,6 +22,7 @@ export function ImageUpload({ productId, images, onUpdate }: ImageUploadProps) {
   const [error, setError] = useState<string | null>(null);
   const [viewerOpen, setViewerOpen] = useState(false);
   const [viewerIndex, setViewerIndex] = useState(0);
+  const [confirmRemoveUrl, setConfirmRemoveUrl] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -59,7 +61,6 @@ export function ImageUpload({ productId, images, onUpdate }: ImageUploadProps) {
 
   async function handleRemove(url: string) {
     setError(null);
-    if (!confirm("¿Seguro que quieres eliminar esta imagen?")) return;
     try {
       const updated = images.filter((img) => img !== url);
       await productsApi.update(productId, { images: updated });
@@ -95,6 +96,17 @@ export function ImageUpload({ productId, images, onUpdate }: ImageUploadProps) {
 
   return (
     <div className="space-y-3">
+      <ConfirmModal
+        open={confirmRemoveUrl !== null}
+        title="Eliminar imagen"
+        message="¿Seguro que quieres eliminar esta imagen?"
+        confirmLabel="Eliminar"
+        onConfirm={() => {
+          if (confirmRemoveUrl) handleRemove(confirmRemoveUrl);
+          setConfirmRemoveUrl(null);
+        }}
+        onCancel={() => setConfirmRemoveUrl(null)}
+      />
       {/* Miniaturas existentes */}
       {images.length > 0 && (
         <div className="flex flex-wrap gap-2">
@@ -133,7 +145,7 @@ export function ImageUpload({ productId, images, onUpdate }: ImageUploadProps) {
                 type="button"
                 onClick={(event) => {
                   event.stopPropagation();
-                  handleRemove(url);
+                  setConfirmRemoveUrl(url);
                 }}
                 className="absolute left-1 top-1 z-10 rounded-full bg-black/70 p-1 text-white opacity-0 transition-opacity group-hover:opacity-100"
                 title="Eliminar imagen"
