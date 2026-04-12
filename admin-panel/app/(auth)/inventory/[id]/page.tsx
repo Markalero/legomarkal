@@ -20,7 +20,9 @@ import {
   conditionLabel,
   calcMarginPct,
   formatPct,
+  toUiError,
 } from "@/lib/utils";
+import { useToast } from "@/lib/toast-context";
 import type { Product, PriceAlert, ProductPriceHistory } from "@/types";
 
 interface Props {
@@ -46,6 +48,7 @@ export default function ProductDetailPage({ params }: Props) {
   const [alertType, setAlertType] = useState<"PRICE_ABOVE" | "PRICE_BELOW" | "PRICE_CHANGE_PCT">("PRICE_BELOW");
   const [alertThreshold, setAlertThreshold] = useState<string>("");
   const [sellModalOpen, setSellModalOpen] = useState(false);
+  const toast = useToast();
 
   const load = useCallback(async () => {
     const [p, ph, al] = await Promise.all([
@@ -74,6 +77,7 @@ export default function ProductDetailPage({ params }: Props) {
     setDeleting(true);
     try {
       await productsApi.delete(params.id);
+      toast.success("Producto eliminado");
       router.push("/inventory");
     } finally {
       setDeleting(false);
@@ -102,7 +106,11 @@ export default function ProductDetailPage({ params }: Props) {
         threshold_value: Number(alertThreshold),
       });
       setAlertThreshold("");
+      toast.success("Alerta creada correctamente");
       await load();
+    } catch (e: unknown) {
+      const uiError = toUiError(e, "No se pudo crear la alerta.");
+      toast.error(uiError.message);
     } finally {
       setCreatingAlert(false);
     }
