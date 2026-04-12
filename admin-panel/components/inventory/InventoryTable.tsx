@@ -3,16 +3,12 @@
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { ChevronLeft, ChevronRight, X } from "lucide-react";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
+import { Lightbox } from "@/components/ui/Lightbox";
 import { SaleModal } from "@/components/inventory/SaleModal";
-import {
-  formatCurrency,
-  formatPct,
-  conditionLabel,
-  calcMarginPct,
-} from "@/lib/utils";
+import { formatCurrency, formatPct, conditionLabel, calcMarginPct } from "@/lib/utils";
 import type { Product, ProductListOut } from "@/types";
 
 function getRangeByCondition(product: Product): { min: number | null; max: number | null } {
@@ -63,8 +59,10 @@ export function InventoryTable({ data, onPageChange, onToggleAvailability, onSal
 
   // Producto objetivo para el modal de venta; null = modal cerrado
   const [sellTarget, setSellTarget] = useState<SellTarget | null>(null);
-  // URL de imagen en el lightbox; null = cerrado
-  const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
+  // Estado del lightbox
+  const [lightboxOpen, setLightboxOpen] = useState(false);
+  const [lightboxImages, setLightboxImages] = useState<string[]>([]);
+  const [lightboxIndex, setLightboxIndex] = useState(0);
 
   function resolveImageUrl(url: string) {
     if (url.startsWith("http://") || url.startsWith("https://")) return url;
@@ -86,28 +84,13 @@ export function InventoryTable({ data, onPageChange, onToggleAvailability, onSal
         onCancel={() => setSellTarget(null)}
       />
 
-      {/* Lightbox de imagen — cierra con Escape o click en overlay */}
-      {lightboxUrl && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 p-4 animate-fade-in"
-          onClick={() => setLightboxUrl(null)}
-        >
-          <button
-            type="button"
-            onClick={() => setLightboxUrl(null)}
-            className="absolute right-4 top-4 rounded-full bg-black/70 p-2 text-white hover:bg-black/90"
-            title="Cerrar"
-          >
-            <X className="h-5 w-5" />
-          </button>
-          <div
-            className="relative h-[80vh] w-full max-w-3xl animate-zoom-in-fade"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <Image src={lightboxUrl} alt="Vista ampliada" fill className="object-contain" sizes="100vw" />
-          </div>
-        </div>
-      )}
+      <Lightbox
+        images={lightboxImages}
+        initialIndex={lightboxIndex}
+        open={lightboxOpen}
+        onClose={() => setLightboxOpen(false)}
+        showThumbnails={false}
+      />
 
       <div className="flex flex-col">
         {/* Tabla */}
@@ -130,10 +113,7 @@ export function InventoryTable({ data, onPageChange, onToggleAvailability, onSal
             <tbody className="divide-y divide-border">
               {items.length === 0 && (
                 <tr>
-                  <td
-                    colSpan={11}
-                    className="px-4 py-12 text-center text-text-muted"
-                  >
+                  <td colSpan={10} className="px-4 py-12 text-center text-text-muted">
                     Sin productos que coincidan con los filtros.
                   </td>
                 </tr>
@@ -169,7 +149,9 @@ export function InventoryTable({ data, onPageChange, onToggleAvailability, onSal
                           type="button"
                           onClick={(e) => {
                             e.stopPropagation();
-                            setLightboxUrl(resolveImageUrl(product.images![0]));
+                            setLightboxImages([resolveImageUrl(product.images![0])]);
+                            setLightboxIndex(0);
+                            setLightboxOpen(true);
                           }}
                           className="relative h-10 w-10 overflow-hidden rounded-md border border-border transition-opacity hover:opacity-80"
                           title="Ver imagen"
@@ -187,9 +169,7 @@ export function InventoryTable({ data, onPageChange, onToggleAvailability, onSal
                       {product.theme ?? "—"}
                     </td>
                     <td className="px-4 py-3">
-                      <Badge variant="neutral">
-                        {conditionLabel(product.condition)}
-                      </Badge>
+                      <Badge variant="neutral">{conditionLabel(product.condition)}</Badge>
                     </td>
                     <td className="px-4 py-3 text-right text-text-secondary">
                       {product.quantity ?? 1}
@@ -202,9 +182,7 @@ export function InventoryTable({ data, onPageChange, onToggleAvailability, onSal
                       <div className="flex flex-col items-end gap-0.5">
                         <span className="inline-flex items-center justify-end gap-1.5">
                           {formatCurrency(displayPrice)}
-                          {isSold && (
-                            <Badge variant="neutral">venta</Badge>
-                          )}
+                          {isSold && <Badge variant="neutral">venta</Badge>}
                         </span>
                         {!isSold && (range.min !== null || range.max !== null) && (
                           <span className="text-xs text-text-muted">
@@ -213,9 +191,7 @@ export function InventoryTable({ data, onPageChange, onToggleAvailability, onSal
                         )}
                       </div>
                     </td>
-                    <td className="px-4 py-3 text-right">
-                      {marginBadge(marginPct)}
-                    </td>
+                    <td className="px-4 py-3 text-right">{marginBadge(marginPct)}</td>
                     <td className="px-4 py-3">
                       <Button
                         variant={isSold ? "danger" : "secondary"}
@@ -262,9 +238,7 @@ export function InventoryTable({ data, onPageChange, onToggleAvailability, onSal
             >
               <ChevronLeft className="h-4 w-4" />
             </Button>
-            <span className="text-xs text-text-secondary">
-              {page} / {pages || 1}
-            </span>
+            <span className="text-xs text-text-secondary">{page} / {pages || 1}</span>
             <Button
               variant="ghost"
               size="sm"

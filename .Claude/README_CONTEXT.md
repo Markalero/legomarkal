@@ -1,6 +1,6 @@
 # README_CONTEXT
  
-Fecha de actualización: 2026-04-12 (auditoría y mejoras frontend: progreso de refresco, modales de confirmación, lightbox de imágenes, hook useRefreshProgress, animaciones Tailwind)
+Fecha de actualización: 2026-04-12 (auditoría y mejoras frontend: progreso de refresco, modales de confirmación, lightbox UI, robustez de gráficas diarias y bandas min/max curvas)
 
 ---
 
@@ -12,6 +12,9 @@ Fecha de actualización: 2026-04-12 (auditoría y mejoras frontend: progreso de 
 - **Páginas actualizadas**: admin-panel/app/(auth)/dashboard/page.tsx, admin-panel/app/(auth)/inventory/page.tsx, admin-panel/app/(auth)/prices/page.tsx, admin-panel/app/(auth)/inventory/[id]/page.tsx, admin-panel/app/(auth)/inventory/new/page.tsx, admin-panel/app/(auth)/alerts/page.tsx — migradas a `useRefreshProgress` y `RefreshProgressOverlay`.
 - **Refactor UX**: Reemplazo de `confirm()` por `ConfirmModal`, adición de `backHref/backLabel` en `Header`, lightbox de imagen en `InventoryTable`, auto-guardado de fuentes de compra en nuevo producto.
 - **Estética / Animaciones**: admin-panel/tailwind.config.ts añade keyframes y clases `fade-in`, `slide-up-fade`, `zoom-in-fade`; múltiples páginas usan `animate-slide-up-fade`.
+- **Visor de imágenes mejorado**: nuevo componente reutilizable `admin-panel/components/ui/Lightbox.tsx` aplicado en inventario y subida de imágenes (`ImageUpload`) con controles centrados, teclado, miniaturas y cierre integrado en contenedor.
+- **Gráficas individuales más robustas (datos diarios)**: `admin-panel/app/(auth)/prices/page.tsx` combina `/market-prices/{id}/trend` con `/market-prices/{id}` para no perder muestras diarias existentes si el endpoint de tendencia llega incompleto.
+- **Bandas min/max curvas**: en `admin-panel/app/(auth)/prices/page.tsx` la zona sombreada y límites de variabilidad pasan de `linear` a `monotone`, alineándose con la curva de precios y evitando salidas visuales de umbral.
 
 Se recomienda revisar las nuevas piezas UI y el hook `useRefreshProgress` para integrarlas en futuras vistas que requieran feedback de operaciones largas.
 

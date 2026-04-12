@@ -23,7 +23,107 @@ import { ChartRangeSelector } from "@/components/ui/ChartRangeSelector";
 import type { RangeKey } from "@/components/ui/ChartRangeSelector";
 import { useRefreshProgress } from "@/lib/useRefreshProgress";
 import { RefreshProgressOverlay } from "@/components/ui/RefreshProgressOverlay";
-import type { Condition, PriceInsightProduct, PriceTrendPoint, ProductPriceHistoryPoint } from "@/types";
+import type { Condition, MarketPrice, PriceInsightProduct, PriceTrendPoint, ProductPriceHistoryPoint } from "@/types";
+
+function toDateKey(value: string): string {
+  return new Date(value).toISOString().slice(0, 10);
+}
+
+function avgNullable(values: Array<number | null | undefined>): number | null {
+  const nums = values
+    .map((v) => (v == null ? null : Number(v)))
+    .filter((v): v is number => v != null && Number.isFinite(v));
+  if (nums.length === 0) return null;
+  return Number((nums.reduce((acc, n) => acc + n, 0) / nums.length).toFixed(2));
+}
+
+function minNullable(values: Array<number | null | undefined>): number | null {
+  const nums = values
+    .map((v) => (v == null ? null : Number(v)))
+    .filter((v): v is number => v != null && Number.isFinite(v));
+  if (nums.length === 0) return null;
+  return Number(Math.min(...nums).toFixed(2));
+}
+
+function maxNullable(values: Array<number | null | undefined>): number | null {
+  const nums = values
+    .map((v) => (v == null ? null : Number(v)))
+    .filter((v): v is number => v != null && Number.isFinite(v));
+  if (nums.length === 0) return null;
+  return Number(Math.max(...nums).toFixed(2));
+}
+
+function buildDailyPointsFromHistory(history: MarketPrice[]): ProductPriceHistoryPoint[] {
+  const byDay = new Map<string, MarketPrice[]>();
+  for (const row of history) {
+    const key = toDateKey(row.fetched_at);
+    const bucket = byDay.get(key) ?? [];
+    bucket.push(row);
+    byDay.set(key, bucket);
+  }
+
+  return Array.from(byDay.entries())
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([dateKey, rows]) => {
+      // Prioriza BrickLink; si no hay en ese día, usa el resto para no perder muestras válidas.
+      const preferred = rows.filter((r) => r.source === "bricklink");
+      const sourceRows = preferred.length > 0 ? preferred : rows;
+
+      const priceNew = avgNullable(sourceRows.map((r) => r.price_new));
+      const priceUsed = avgNullable(sourceRows.map((r) => r.price_used));
+
+      const minNew = minNullable(sourceRows.map((r) => r.min_price_new ?? r.price_new));
+      const maxNew = maxNullable(sourceRows.map((r) => r.max_price_new ?? r.price_new));
+      const minUsed = minNullable(sourceRows.map((r) => r.min_price_used ?? r.price_used));
+      const maxUsed = maxNullable(sourceRows.map((r) => r.max_price_used ?? r.price_used));
+
+      return {
+        date: `${dateKey}T00:00:00Z`,
+        price_new: priceNew,
+        price_used: priceUsed,
+        min_price_new: minNew,
+        max_price_new: maxNew,
+        min_price_used: minUsed,
+        max_price_used: maxUsed,
+      };
+    });
+}
+
+function mergeTrendWithHistory(
+  trendPoints: ProductPriceHistoryPoint[],
+  historyRows: MarketPrice[]
+): ProductPriceHistoryPoint[] {
+  const merged = new Map<string, ProductPriceHistoryPoint>();
+
+  for (const point of trendPoints) {
+    merged.set(toDateKey(point.date), {
+      ...point,
+      date: `${toDateKey(point.date)}T00:00:00Z`,
+    });
+  }
+
+  for (const fallback of buildDailyPointsFromHistory(historyRows)) {
+    const key = toDateKey(fallback.date);
+    const current = merged.get(key);
+
+    if (!current) {
+      merged.set(key, fallback);
+      continue;
+    }
+
+    merged.set(key, {
+      ...current,
+      price_new: current.price_new ?? fallback.price_new,
+      price_used: current.price_used ?? fallback.price_used,
+      min_price_new: current.min_price_new ?? fallback.min_price_new,
+      max_price_new: current.max_price_new ?? fallback.max_price_new,
+      min_price_used: current.min_price_used ?? fallback.min_price_used,
+      max_price_used: current.max_price_used ?? fallback.max_price_used,
+    });
+  }
+
+  return Array.from(merged.values()).sort((a, b) => a.date.localeCompare(b.date));
+}
 
 export default function PricesPage() {
   const [insights, setInsights] = useState<PriceInsightProduct[]>([]);
@@ -155,12 +255,18 @@ export default function PricesPage() {
     setSelectedPurchasePrice(product.purchase_price ?? null);
     setSelectedFallbackBandMin(toNum(product.min_market_price));
     setSelectedFallbackBandMax(toNum(product.max_market_price));
-    try {
-      const trend = await pricesApi.trend(product.id, 6, "sold");
-      setSelectedHistory(trend.points);
-    } catch {
-      setSelectedHistory([]);
-    }
+    const [trendResult, historyResult] = await Promise.allSettled([
+      pricesApi.trend(product.id, 6, "sold"),
+      pricesApi.history(product.id),
+    ]);
+
+    const trendPoints =
+      trendResult.status === "fulfilled" ? trendResult.value.points : [];
+    const historyRows =
+      historyResult.status === "fulfilled" ? historyResult.value : [];
+
+    const mergedPoints = mergeTrendWithHistory(trendPoints, historyRows);
+    setSelectedHistory(mergedPoints);
   }
 
   const sortedGlobalTrends = [...globalTrends].sort((a, b) => a.date.localeCompare(b.date));
@@ -481,54 +587,54 @@ export default function PricesPage() {
                     {selectedProductId ? (
                       <>
                         {/* Límites min/max invisibles para banda de variabilidad (nuevo) */}
-                        <Line type="linear" dataKey="newBandMin" stroke="#F59E0B" strokeOpacity={0} dot={false} activeDot={false} legendType="none" connectNulls />
-                        <Line type="linear" dataKey="newBandMax" stroke="#F59E0B" strokeOpacity={0} dot={false} activeDot={false} legendType="none" connectNulls />
+                        <Line type="monotone" dataKey="newBandMin" stroke="#F59E0B" strokeOpacity={0} dot={false} activeDot={false} legendType="none" connectNulls />
+                        <Line type="monotone" dataKey="newBandMax" stroke="#F59E0B" strokeOpacity={0} dot={false} activeDot={false} legendType="none" connectNulls />
                         {/* Límites min/max invisibles para banda de variabilidad (usado) */}
-                        <Line type="linear" dataKey="usedBandMin" stroke="#3B82F6" strokeOpacity={0} dot={false} activeDot={false} legendType="none" connectNulls />
-                        <Line type="linear" dataKey="usedBandMax" stroke="#3B82F6" strokeOpacity={0} dot={false} activeDot={false} legendType="none" connectNulls />
+                        <Line type="monotone" dataKey="usedBandMin" stroke="#3B82F6" strokeOpacity={0} dot={false} activeDot={false} legendType="none" connectNulls />
+                        <Line type="monotone" dataKey="usedBandMax" stroke="#3B82F6" strokeOpacity={0} dot={false} activeDot={false} legendType="none" connectNulls />
 
                         <Area
-                          type="linear"
+                          type="monotone"
                           dataKey="newBandMin"
                           stackId="varianceNew"
                           stroke="none"
                           fillOpacity={0}
                           connectNulls
                           isAnimationActive={false}
-                          activeDot={{ r: 5, fill: "#F59E0B", stroke: "#FFFFFF", strokeWidth: 1 }}
+                          activeDot={false}
                           legendType="none"
                         />
                         <Area
-                          type="linear"
+                          type="monotone"
                           dataKey="newBandSpan"
                           stackId="varianceNew"
                           stroke="none"
                           fill="#F59E0B"
                           fillOpacity={highlightNew ? 0.24 : 0.12}
                           connectNulls
-                          activeDot={{ r: 5, fill: "#F59E0B", stroke: "#FFFFFF", strokeWidth: 1 }}
+                          activeDot={false}
                           legendType="none"
                         />
                         <Area
-                          type="linear"
+                          type="monotone"
                           dataKey="usedBandMin"
                           stackId="varianceUsed"
                           stroke="none"
                           fillOpacity={0}
                           connectNulls
                           isAnimationActive={false}
-                          activeDot={{ r: 5, fill: "#3B82F6", stroke: "#FFFFFF", strokeWidth: 1 }}
+                          activeDot={false}
                           legendType="none"
                         />
                         <Area
-                          type="linear"
+                          type="monotone"
                           dataKey="usedBandSpan"
                           stackId="varianceUsed"
                           stroke="none"
                           fill="#3B82F6"
                           fillOpacity={highlightUsed ? 0.24 : 0.12}
                           connectNulls
-                          activeDot={{ r: 5, fill: "#3B82F6", stroke: "#FFFFFF", strokeWidth: 1 }}
+                          activeDot={false}
                           legendType="none"
                         />
                         {selectedPurchasePrice !== null && (
