@@ -1,6 +1,8 @@
 // Layout raíz — aplica fuente, meta y estilos globales
 import type { Metadata } from "next";
 import "./globals.css";
+import { ToastProvider } from "@/lib/toast-context";
+import { ToastContainer } from "@/components/ui/ToastContainer";
 
 export const metadata: Metadata = {
   title: "LegoMarkal Admin",
@@ -18,7 +20,10 @@ export default function RootLayout({
         <a href="#main-content" className="skip-link">
           Saltar al contenido principal
         </a>
-        {children}
+        <ToastProvider>
+          {children}
+          <ToastContainer />
+        </ToastProvider>
       </body>
     </html>
   );
