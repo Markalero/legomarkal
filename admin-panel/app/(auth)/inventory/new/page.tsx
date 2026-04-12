@@ -10,6 +10,7 @@ import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { productsApi } from "@/lib/api-client";
+import { useToast } from "@/lib/toast-context";
 
 const PURCHASE_SOURCES_KEY = "legomarkal_purchase_sources";
 
@@ -17,6 +18,7 @@ export default function NewProductPage() {
   const router = useRouter();
   const [purchaseSources, setPurchaseSources] = useState<string[]>([]);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const toast = useToast();
 
   const schema = z.object({
     set_number: z
@@ -75,6 +77,7 @@ export default function NewProductPage() {
         localStorage.setItem(PURCHASE_SOURCES_KEY, JSON.stringify(updated));
       }
 
+      toast.success("Producto creado correctamente");
       router.push("/inventory");
     } catch (error: unknown) {
       setSubmitError(error instanceof Error ? error.message : "No se pudo crear el producto");
