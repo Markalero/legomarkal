@@ -1,4 +1,4 @@
-# Router de productos — CRUD, paginación, filtros, importación y exportación CSV
+# Router de productos — CRUD, paginación, filtros, importación, exportación y recibos PDF
 import csv
 import io
 from pathlib import Path
@@ -15,6 +15,7 @@ from app.database import get_db
 from app.schemas.product import ProductCreate, ProductListOut, ProductOut, ProductQuickCreate, ProductUpdate
 from app.services.product_service import product_service
 from app.services.import_service import bulk_import
+from app.services.storage_service import StorageService
 
 router = APIRouter(prefix="/products", tags=["products"])
 
@@ -121,3 +122,80 @@ def upload_product_images(
 
     updated = product_service.update_product(db, product_id, ProductUpdate(images=image_urls))
     return {"images": updated.images if updated else image_urls}
+
+
+@router.post("/{product_id}/sale-receipts", response_model=ProductOut)
+def upload_sale_receipts(
+    product_id: UUID,
+    files: list[UploadFile] = File(...),
+    db: Session = Depends(get_db),
+    _: str = Depends(get_current_user),
+):
+    """Sube PDFs de recibo de venta y los asocia al producto."""
+    product = product_service.get_product(db, product_id)
+    if not product:
+        raise HTTPException(status_code=404, detail="Producto no encontrado")
+
+    storage = StorageService()
+    receipts = list(product.sale_receipts or [])
+
+    for file in files:
+        if file.content_type != "application/pdf":
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"'{file.filename}' no es un PDF válido",
+            )
+        data = file.file.read()
+        meta = storage.upload_receipt(
+            str(product_id),
+            data,
+            file.filename or "receipt.pdf",
+            "application/pdf",
+        )
+        receipts.append(meta)
+
+    updated = product_service.update_product(db, product_id, ProductUpdate(sale_receipts=receipts))
+    return updated
+
+
+@router.delete("/{product_id}/sale-receipts/{receipt_id}", status_code=204)
+def delete_sale_receipt(
+    product_id: UUID,
+    receipt_id: str,
+    db: Session = Depends(get_db),
+    _: str = Depends(get_current_user),
+):
+    """Elimina un recibo de venta del bucket Supabase y de los metadatos del producto."""
+    product = product_service.get_product(db, product_id)
+    if not product:
+        raise HTTPException(status_code=404, detail="Producto no encontrado")
+
+    receipts = list(product.sale_receipts or [])
+    target = next((r for r in receipts if r.get("id") == receipt_id), None)
+    if not target:
+        raise HTTPException(status_code=404, detail="Recibo no encontrado")
+
+    StorageService().delete_receipt(target["storage_path"])
+    remaining = [r for r in receipts if r.get("id") != receipt_id]
+    product_service.update_product(db, product_id, ProductUpdate(sale_receipts=remaining))
+
+
+@router.get("/{product_id}/sale-receipts/{receipt_id}/download")
+def download_sale_receipt(
+    product_id: UUID,
+    receipt_id: str,
+    db: Session = Depends(get_db),
+    _: str = Depends(get_current_user),
+):
+    """Genera una URL firmada de descarga válida durante 1 hora."""
+    product = product_service.get_product(db, product_id)
+    if not product:
+        raise HTTPException(status_code=404, detail="Producto no encontrado")
+
+    receipts = list(product.sale_receipts or [])
+    target = next((r for r in receipts if r.get("id") == receipt_id), None)
+    if not target:
+        raise HTTPException(status_code=404, detail="Recibo no encontrado")
+
+    url = StorageService().get_signed_url(target["storage_path"])
+    return {"url": url}

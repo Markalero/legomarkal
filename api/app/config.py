@@ -9,6 +9,7 @@ class Settings(BaseSettings):
     direct_url: str
     supabase_url: str
     supabase_anon_key: str
+    supabase_service_key: str = ""
     jwt_secret: str
     jwt_algorithm: str = "HS256"
     jwt_expire_minutes: int = 60 * 24  # 24 horas

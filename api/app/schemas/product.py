@@ -1,7 +1,7 @@
 # Schemas Pydantic para validación y serialización de Product
 from datetime import date, datetime
 from decimal import Decimal
-from typing import List, Literal, Optional
+from typing import Any, Dict, List, Literal, Optional
 from uuid import UUID
 
 from pydantic import BaseModel, Field
@@ -42,6 +42,7 @@ class ProductUpdate(ProductBase):
     availability: Optional[AvailabilityType] = None
     sold_date: Optional[date] = None
     sold_price: Optional[Decimal] = None
+    sale_receipts: Optional[List[Dict[str, Any]]] = None
 
 
 class ProductOut(ProductBase):
@@ -52,6 +53,7 @@ class ProductOut(ProductBase):
     latest_market_price: Optional[MarketPriceOut] = None
     sold_date: Optional[date] = None
     sold_price: Optional[Decimal] = None
+    sale_receipts: List[Dict[str, Any]] = []
 
     model_config = {"from_attributes": True}
 

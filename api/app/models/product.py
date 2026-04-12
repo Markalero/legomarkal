@@ -26,6 +26,7 @@ class Product(Base):
     purchase_source = Column(String(255))
     quantity = Column(Integer, default=1)
     images = Column(JSONB, default=list)
+    sale_receipts = Column(JSONB, default=list, nullable=True)
     notes = Column(Text)
     availability = Column(String(20), nullable=False, default="available")
     sold_date = Column(Date, nullable=True)
