@@ -20,7 +20,7 @@ const config: Config = {
         // Texto
         "text-primary": "#F5F5F7",
         "text-secondary": "#A1A1AA",
-        "text-muted": "#71717A",
+        "text-muted": "#8A8A94",
         // Acentos de marca
         "accent-lego": "#F59E0B",
         "accent-lego-dark": "#D97706",

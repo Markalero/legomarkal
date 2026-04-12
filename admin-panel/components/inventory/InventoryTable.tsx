@@ -2,7 +2,7 @@
 "use client";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useState, type KeyboardEvent } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
@@ -69,6 +69,17 @@ export function InventoryTable({ data, onPageChange, onToggleAvailability, onSal
     return new URL(url, apiUrl).toString();
   }
 
+  function navigateToProductDetail(productId: string) {
+    router.push(`/inventory/${productId}`);
+  }
+
+  function handleRowKeyDown(event: KeyboardEvent<HTMLTableRowElement>, productId: string) {
+    if (event.key === "Enter" || event.key === " ") {
+      event.preventDefault();
+      navigateToProductDetail(productId);
+    }
+  }
+
   return (
     <>
       {/* Modal de venta — fuera del <table> para evitar nesting inválido en el DOM */}
@@ -96,18 +107,19 @@ export function InventoryTable({ data, onPageChange, onToggleAvailability, onSal
         {/* Tabla */}
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
+            <caption className="sr-only">Listado de productos del inventario</caption>
             <thead>
               <tr className="border-b border-border bg-bg-elevated text-left text-xs text-text-muted uppercase tracking-wider">
-                <th className="px-4 py-3">Set ID</th>
-                <th className="px-4 py-3">Imagen</th>
-                <th className="px-4 py-3">Nombre</th>
-                <th className="px-4 py-3">Tema</th>
-                <th className="px-4 py-3">Condición</th>
-                <th className="px-4 py-3 text-right">Cantidad</th>
-                <th className="px-4 py-3 text-right">Compra</th>
-                <th className="px-4 py-3 text-right">Mercado</th>
-                <th className="px-4 py-3 text-right">Margen</th>
-                <th className="px-4 py-3">Disponibilidad</th>
+                <th scope="col" className="px-4 py-3">Set ID</th>
+                <th scope="col" className="px-4 py-3">Imagen</th>
+                <th scope="col" className="px-4 py-3">Nombre</th>
+                <th scope="col" className="px-4 py-3">Tema</th>
+                <th scope="col" className="px-4 py-3">Condición</th>
+                <th scope="col" className="px-4 py-3 text-right">Cantidad</th>
+                <th scope="col" className="px-4 py-3 text-right">Compra</th>
+                <th scope="col" className="px-4 py-3 text-right">Mercado</th>
+                <th scope="col" className="px-4 py-3 text-right">Margen</th>
+                <th scope="col" className="px-4 py-3">Disponibilidad</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
@@ -138,7 +150,10 @@ export function InventoryTable({ data, onPageChange, onToggleAvailability, onSal
                     className={`cursor-pointer transition-colors hover:bg-bg-elevated/50 ${
                       isSold ? "opacity-60" : ""
                     }`}
-                    onClick={() => router.push(`/inventory/${product.id}`)}
+                    tabIndex={0}
+                    aria-label={`Abrir ficha de ${product.name}`}
+                    onClick={() => navigateToProductDetail(product.id)}
+                    onKeyDown={(event) => handleRowKeyDown(event, product.id)}
                   >
                     <td className="px-4 py-3 font-mono text-xs text-text-secondary">
                       {product.set_number ?? "—"}

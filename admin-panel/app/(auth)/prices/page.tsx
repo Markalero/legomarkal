@@ -1,6 +1,6 @@
 // Página de precios — listado de productos con último precio de mercado y botón de scraping puntual
 "use client";
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, type KeyboardEvent } from "react";
 import {
   ResponsiveContainer,
   ComposedChart,
@@ -18,7 +18,7 @@ import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { RefreshPricesButton } from "@/components/ui/RefreshPricesButton";
 import { dashboardApi, pricesApi, productsApi } from "@/lib/api-client";
-import { conditionLabel, formatCurrency, formatDate } from "@/lib/utils";
+import { conditionLabel, formatCurrency, formatDate, toUiError } from "@/lib/utils";
 import { ChartRangeSelector } from "@/components/ui/ChartRangeSelector";
 import type { RangeKey } from "@/components/ui/ChartRangeSelector";
 import { useRefreshProgress } from "@/lib/useRefreshProgress";
@@ -137,6 +137,7 @@ export default function PricesPage() {
   const [selectedHistory, setSelectedHistory] = useState<ProductPriceHistoryPoint[]>([]);
   const [fallbackMode, setFallbackMode] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [errorDetails, setErrorDetails] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const { refreshing: refreshingAll, progress: refreshProgress, status: refreshStatus, setProgress, setStatus, begin, end, startPredictiveProgress, stopPredictorRef } = useRefreshProgress();
 
@@ -177,6 +178,7 @@ export default function PricesPage() {
     setGlobalTrends(trends);
     setFallbackMode(true);
     setErrorMsg(null);
+    setErrorDetails(null);
   }, []);
 
   const load = useCallback(async () => {
@@ -190,15 +192,14 @@ export default function PricesPage() {
       setGlobalTrends(nextTrends);
       setFallbackMode(false);
       setErrorMsg(null);
+      setErrorDetails(null);
     } catch {
       try {
         await loadFallback();
       } catch (fallbackError) {
-        const message =
-          fallbackError instanceof Error
-            ? fallbackError.message
-            : "No se pudieron cargar los datos de precios";
-        setErrorMsg(message);
+        const uiError = toUiError(fallbackError, "No se pudieron cargar los datos de precios.");
+        setErrorMsg(uiError.message);
+        setErrorDetails(uiError.details ?? null);
         setInsights([]);
         setGlobalTrends([]);
       }
@@ -243,6 +244,10 @@ export default function PricesPage() {
       setProgress(100);
       setStatus("Completado");
       await new Promise((resolve) => setTimeout(resolve, 450));
+    } catch (e: unknown) {
+      const uiError = toUiError(e, "No se pudieron actualizar los precios.");
+      setErrorMsg(uiError.message);
+      setErrorDetails(uiError.details ?? null);
     } finally {
       end();
     }
@@ -267,6 +272,13 @@ export default function PricesPage() {
 
     const mergedPoints = mergeTrendWithHistory(trendPoints, historyRows);
     setSelectedHistory(mergedPoints);
+  }
+
+  function handleInsightRowKeyDown(event: KeyboardEvent<HTMLTableRowElement>, product: PriceInsightProduct) {
+    if (event.key === "Enter" || event.key === " ") {
+      event.preventDefault();
+      void handleSelectProduct(product);
+    }
   }
 
   const sortedGlobalTrends = [...globalTrends].sort((a, b) => a.date.localeCompare(b.date));
@@ -503,6 +515,17 @@ export default function PricesPage() {
             {errorMsg && (
               <Card>
                 <p className="text-sm text-status-error">{errorMsg}</p>
+                <div className="mt-2 flex flex-wrap items-center gap-3">
+                  <Button type="button" variant="secondary" size="sm" onClick={load}>
+                    Reintentar
+                  </Button>
+                  {errorDetails && (
+                    <details className="text-xs text-text-secondary">
+                      <summary className="cursor-pointer">Detalle técnico</summary>
+                      <p className="mt-1 break-all">{errorDetails}</p>
+                    </details>
+                  )}
+                </div>
               </Card>
             )}
 
@@ -688,16 +711,17 @@ export default function PricesPage() {
             <Card padded={false}>
             <div className="overflow-hidden rounded-xl">
             <table className="w-full text-sm">
+              <caption className="sr-only">Listado de precios y beneficio por producto</caption>
               <thead>
                 <tr className="border-b border-border bg-bg-elevated text-left text-xs text-text-muted uppercase tracking-wider">
-                  <th className="px-4 py-3">Set ID</th>
-                  <th className="px-4 py-3">Nombre</th>
-                  <th className="px-4 py-3">Estado</th>
-                  <th className="px-4 py-3 text-right">Compra</th>
-                  <th className="px-4 py-3 text-right">Actual</th>
-                  <th className="px-4 py-3 text-right text-text-muted/80">Mín.</th>
-                  <th className="px-4 py-3 text-right text-text-muted/80">Máx.</th>
-                  <th className="px-4 py-3 text-right">Beneficio</th>
+                  <th scope="col" className="px-4 py-3">Set ID</th>
+                  <th scope="col" className="px-4 py-3">Nombre</th>
+                  <th scope="col" className="px-4 py-3">Estado</th>
+                  <th scope="col" className="px-4 py-3 text-right">Compra</th>
+                  <th scope="col" className="px-4 py-3 text-right">Actual</th>
+                  <th scope="col" className="px-4 py-3 text-right text-text-muted/80">Mín.</th>
+                  <th scope="col" className="px-4 py-3 text-right text-text-muted/80">Máx.</th>
+                  <th scope="col" className="px-4 py-3 text-right">Beneficio</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
@@ -709,7 +733,10 @@ export default function PricesPage() {
                         ? "bg-bg-elevated/40 shadow-[inset_3px_0_0_0_rgba(16,185,129,0.45)]"
                         : ""
                     }`}
+                    tabIndex={0}
+                    aria-label={`Seleccionar ${p.name} para ver el historico`}
                     onClick={() => handleSelectProduct(p)}
+                    onKeyDown={(event) => handleInsightRowKeyDown(event, p)}
                   >
                     <td className="px-4 py-3">
                       <span className="inline-flex items-center rounded-md border border-border bg-bg-elevated px-2 py-0.5 font-mono text-xs">

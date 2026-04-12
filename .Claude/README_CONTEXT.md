@@ -1,12 +1,13 @@
 # README_CONTEXT
  
-Fecha de actualización: 2026-04-12 (auditoría y mejoras frontend: progreso de refresco, modales de confirmación, lightbox UI, robustez de gráficas diarias y bandas min/max curvas)
+Fecha de actualización: 2026-04-12 (auditoria y mejoras frontend: accesibilidad base, errores UX, tablas semanticas, sidebar responsive y robustez de modales)
 
 ---
 
 ## Últimos cambios detectados
 
 - **Fecha**: 2026-04-12 — resumen de cambios frontend recientes.
+- **Fixes aplicados (auditoria UI/A11Y)**: mejoras transversales en `Modal` (role dialog, aria-modal, trap de foco, restauracion de foco y cierre accesible), `Input` (aria-invalid + aria-describedby), `ChartRangeSelector` (radiogroup + estado ARIA), tablas con `caption/scope`, filas clicables accesibles por teclado en inventario/precios, reemplazo de `confirm()` nativo en recibos por `ConfirmModal`, `skip-link` global, mensajes de error mas amigables con detalle tecnico opcional y sidebar responsive con drawer movil.
 - **Componentes añadidos**: admin-panel/components/ui/ConfirmModal.tsx (modal de confirmación) y admin-panel/components/ui/RefreshProgressOverlay.tsx (overlay de progreso).
 - **Hook añadido**: admin-panel/lib/useRefreshProgress.ts — centraliza lógica de progreso predictivo y control de estado de refresco.
 - **Páginas actualizadas**: admin-panel/app/(auth)/dashboard/page.tsx, admin-panel/app/(auth)/inventory/page.tsx, admin-panel/app/(auth)/prices/page.tsx, admin-panel/app/(auth)/inventory/[id]/page.tsx, admin-panel/app/(auth)/inventory/new/page.tsx, admin-panel/app/(auth)/alerts/page.tsx — migradas a `useRefreshProgress` y `RefreshProgressOverlay`.

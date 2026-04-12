@@ -12,7 +12,7 @@ import { RefreshPricesButton } from "@/components/ui/RefreshPricesButton";
 import { useRefreshProgress } from "@/lib/useRefreshProgress";
 import { RefreshProgressOverlay } from "@/components/ui/RefreshProgressOverlay";
 import { dashboardApi, alertsApi, productsApi } from "@/lib/api-client";
-import { formatCurrency, formatPct } from "@/lib/utils";
+import { formatCurrency, formatPct, toUiError } from "@/lib/utils";
 import type { DashboardSummary, TopMarginProduct, PriceTrendPoint, PriceAlert, RealProfitSummary } from "@/types";
 
 export default function DashboardPage() {
@@ -24,10 +24,12 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const { refreshing: scraping, progress: refreshProgress, status: refreshStatus, setProgress, setStatus, begin, end, startPredictiveProgress, stopPredictorRef } = useRefreshProgress();
   const [error, setError] = useState<string | null>(null);
+  const [errorDetails, setErrorDetails] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
+    setErrorDetails(null);
     try {
       const [s, t, tr, al, rp] = await Promise.all([
         dashboardApi.summary(),
@@ -42,7 +44,9 @@ export default function DashboardPage() {
       setAlerts(al);
       setRealProfits(rp);
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : "No se pudo cargar el dashboard");
+      const uiError = toUiError(e, "No se pudo cargar el dashboard.");
+      setError(uiError.message);
+      setErrorDetails(uiError.details ?? null);
     } finally {
       setLoading(false);
     }
@@ -110,7 +114,18 @@ export default function DashboardPage() {
       <div className="flex-1 space-y-6 p-6 animate-slide-up-fade">
         {error && (
           <div className="rounded-lg border border-status-error/30 bg-status-error/10 px-4 py-3 text-sm text-status-error">
-            {error}
+            <p>{error}</p>
+            <div className="mt-2 flex flex-wrap items-center gap-3">
+              <Button type="button" variant="secondary" size="sm" onClick={load}>
+                Reintentar
+              </Button>
+              {errorDetails && (
+                <details className="text-xs text-text-secondary">
+                  <summary className="cursor-pointer">Detalle técnico</summary>
+                  <p className="mt-1 break-all">{errorDetails}</p>
+                </details>
+              )}
+            </div>
           </div>
         )}
 

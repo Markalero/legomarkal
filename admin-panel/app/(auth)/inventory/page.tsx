@@ -1,7 +1,7 @@
 // Página de listado de inventario con filtros, exportación e importación masiva
 "use client";
 import { useEffect, useState, useCallback } from "react";
-import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { Plus, Download, Upload, SlidersHorizontal, PlusCircle, X } from "lucide-react";
 import { Header } from "@/components/layout/Header";
 import { Card } from "@/components/ui/Card";
@@ -14,16 +14,20 @@ import { RefreshPricesButton } from "@/components/ui/RefreshPricesButton";
 import { RefreshProgressOverlay } from "@/components/ui/RefreshProgressOverlay";
 import { useRefreshProgress } from "@/lib/useRefreshProgress";
 import { dashboardApi, productsApi } from "@/lib/api-client";
+import { toUiError } from "@/lib/utils";
 import type { ProductListOut, ProductFilters } from "@/types";
 
 const DEFAULT_FILTERS: ProductFilters = { page: 1, size: 20 };
 const PURCHASE_SOURCES_KEY = "legomarkal_purchase_sources";
 
 export default function InventoryPage() {
+  const router = useRouter();
   const [data, setData] = useState<ProductListOut | null>(null);
   const [filters, setFilters] = useState<ProductFilters>(DEFAULT_FILTERS);
   const [themes, setThemes] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [errorDetails, setErrorDetails] = useState<string | null>(null);
   const [importOpen, setImportOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [purchaseSources, setPurchaseSources] = useState<string[]>([]);
@@ -31,6 +35,8 @@ export default function InventoryPage() {
   const { refreshing: refreshingAll, progress: refreshProgress, status: refreshStatus, setProgress, setStatus, begin, end, startPredictiveProgress, stopPredictorRef } = useRefreshProgress();
 
   const load = useCallback(async (f: ProductFilters) => {
+    setError(null);
+    setErrorDetails(null);
     setLoading(true);
     try {
       const result = await productsApi.list(f);
@@ -38,6 +44,10 @@ export default function InventoryPage() {
       // Extrae temas únicos del resultado actual para el filtro
       const newThemes = Array.from(new Set(result.items.map((p) => p.theme).filter(Boolean) as string[]));
       setThemes((prev) => Array.from(new Set([...prev, ...newThemes])));
+    } catch (e: unknown) {
+      const uiError = toUiError(e, "No se pudo cargar el inventario.");
+      setError(uiError.message);
+      setErrorDetails(uiError.details ?? null);
     } finally {
       setLoading(false);
     }
@@ -86,6 +96,10 @@ export default function InventoryPage() {
       setProgress(100);
       setStatus("Completado");
       await new Promise((resolve) => setTimeout(resolve, 450));
+    } catch (e: unknown) {
+      const uiError = toUiError(e, "No se pudieron actualizar los precios.");
+      setError(uiError.message);
+      setErrorDetails(uiError.details ?? null);
     } finally {
       end();
     }
@@ -96,13 +110,19 @@ export default function InventoryPage() {
   }
 
   async function handleExport() {
-    const blob = await productsApi.exportCsv();
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `inventario_${new Date().toISOString().split("T")[0]}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
+    try {
+      const blob = await productsApi.exportCsv();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `inventario_${new Date().toISOString().split("T")[0]}.csv`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (e: unknown) {
+      const uiError = toUiError(e, "No se pudo exportar el CSV.");
+      setError(uiError.message);
+      setErrorDetails(uiError.details ?? null);
+    }
   }
 
   async function handleToggleAvailability(
@@ -110,13 +130,19 @@ export default function InventoryPage() {
     currentAvailability: "available" | "sold",
   ) {
     // Solo se llega aquí para revertir a "available"; el flujo "sold" lo gestiona SaleModal.
-    if (currentAvailability === "sold") {
-      await productsApi.update(productId, {
-        availability: "available",
-        sold_price: null,
-        sold_date: null,
-      });
-      await load(filters);
+    try {
+      if (currentAvailability === "sold") {
+        await productsApi.update(productId, {
+          availability: "available",
+          sold_price: null,
+          sold_date: null,
+        });
+        await load(filters);
+      }
+    } catch (e: unknown) {
+      const uiError = toUiError(e, "No se pudo cambiar la disponibilidad del producto.");
+      setError(uiError.message);
+      setErrorDetails(uiError.details ?? null);
     }
   }
 
@@ -156,17 +182,32 @@ export default function InventoryPage() {
               <SlidersHorizontal className="h-4 w-4" />
               Configuración
             </Button>
-            <Link href="/inventory/new">
-              <Button size="sm">
-                <Plus className="h-4 w-4" />
-                Añadir producto
-              </Button>
-            </Link>
+            <Button size="sm" type="button" onClick={() => router.push("/inventory/new")}>
+              <Plus className="h-4 w-4" />
+              Añadir producto
+            </Button>
           </div>
         }
       />
 
       <div className="flex-1 p-6 animate-slide-up-fade">
+        {error && (
+          <div className="mb-4 rounded-lg border border-status-error/30 bg-status-error/10 px-4 py-3 text-sm text-status-error">
+            <p>{error}</p>
+            <div className="mt-2 flex flex-wrap items-center gap-3">
+              <Button type="button" variant="secondary" size="sm" onClick={() => load(filters)}>
+                Reintentar
+              </Button>
+              {errorDetails && (
+                <details className="text-xs text-text-secondary">
+                  <summary className="cursor-pointer">Detalle técnico</summary>
+                  <p className="mt-1 break-all">{errorDetails}</p>
+                </details>
+              )}
+            </div>
+          </div>
+        )}
+
         <Card padded={false}>
           <FilterBar
             filters={filters}
@@ -243,6 +284,7 @@ export default function InventoryPage() {
                   key={source}
                   type="button"
                   onClick={() => removePurchaseSource(source)}
+                  aria-label={`Eliminar fuente ${source}`}
                   className="inline-flex items-center gap-1 rounded-full bg-bg-elevated px-3 py-1 text-xs text-text-secondary hover:text-status-error"
                   title="Eliminar opción"
                 >

@@ -50,3 +50,28 @@ export function calcMarginPct(
   if (!purchasePrice || !marketPrice || purchasePrice === 0) return null;
   return ((marketPrice - purchasePrice) / purchasePrice) * 100;
 }
+
+interface UiErrorInfo {
+  message: string;
+  details?: string;
+}
+
+/**
+ * Normaliza errores tecnicos para mostrar mensajes mas claros al usuario,
+ * manteniendo detalle tecnico opcional para diagnostico.
+ */
+export function toUiError(error: unknown, fallbackMessage: string): UiErrorInfo {
+  const details = error instanceof Error ? error.message.trim() : "";
+  if (!details) {
+    return { message: fallbackMessage };
+  }
+
+  if (/No se pudo conectar con la API|ERR_CONNECTION_REFUSED|Failed to fetch|NetworkError/i.test(details)) {
+    return {
+      message: "No se pudo conectar con el servicio. Comprueba que el backend este disponible y vuelve a intentarlo.",
+      details,
+    };
+  }
+
+  return { message: details };
+}

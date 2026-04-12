@@ -14,7 +14,12 @@ export default function RootLayout({
 }) {
   return (
     <html lang="es">
-      <body className="min-h-screen">{children}</body>
+      <body className="min-h-screen">
+        <a href="#main-content" className="skip-link">
+          Saltar al contenido principal
+        </a>
+        {children}
+      </body>
     </html>
   );
 }

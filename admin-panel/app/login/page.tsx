@@ -40,7 +40,7 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-bg-primary px-4">
+    <div id="main-content" className="flex min-h-screen items-center justify-center bg-bg-primary px-4">
       <div className="w-full max-w-sm">
         {/* Logo */}
         <div className="mb-8 text-center">
@@ -71,7 +71,11 @@ export default function LoginPage() {
             />
 
             {apiError && (
-              <div className="flex items-center gap-2 rounded-lg bg-status-error/10 px-3 py-2 text-sm text-status-error">
+              <div
+                role="alert"
+                aria-live="assertive"
+                className="flex items-center gap-2 rounded-lg bg-status-error/10 px-3 py-2 text-sm text-status-error"
+              >
                 <AlertCircle className="h-4 w-4 shrink-0" />
                 {apiError}
               </div>

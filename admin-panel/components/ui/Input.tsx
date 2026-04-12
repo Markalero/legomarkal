@@ -1,6 +1,6 @@
 // Componente Input con soporte para label, error y adorno izquierdo
 import { cn } from "@/lib/utils";
-import { InputHTMLAttributes, forwardRef } from "react";
+import { InputHTMLAttributes, forwardRef, useId } from "react";
 
 interface InputProps extends InputHTMLAttributes<HTMLInputElement> {
   label?: string;
@@ -10,7 +10,11 @@ interface InputProps extends InputHTMLAttributes<HTMLInputElement> {
 
 export const Input = forwardRef<HTMLInputElement, InputProps>(
   ({ label, error, leftAddon, className, id, ...props }, ref) => {
-    const inputId = id ?? label?.toLowerCase().replace(/\s+/g, "-");
+    const generatedId = useId().replace(/:/g, "");
+    const inputId = id ?? label?.toLowerCase().replace(/\s+/g, "-") ?? `input-${generatedId}`;
+    const errorId = `${inputId}-error`;
+    const describedBy = ([props["aria-describedby"], error ? errorId : undefined].filter(Boolean) as string[]).join(" ") || undefined;
+
     return (
       <div className="flex flex-col gap-1.5">
         {label && (
@@ -27,6 +31,8 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
           <input
             ref={ref}
             id={inputId}
+            aria-invalid={error ? true : props["aria-invalid"]}
+            aria-describedby={describedBy}
             className={cn(
               "w-full rounded-lg border border-border bg-bg-elevated px-3 py-2 text-sm text-text-primary placeholder:text-text-muted",
               "focus:outline-none focus:ring-2 focus:ring-accent-lego/50 focus:border-accent-lego/50",
@@ -38,7 +44,11 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
             {...props}
           />
         </div>
-        {error && <p className="text-xs text-status-error">{error}</p>}
+        {error && (
+          <p id={errorId} role="alert" className="text-xs text-status-error">
+            {error}
+          </p>
+        )}
       </div>
     );
   }

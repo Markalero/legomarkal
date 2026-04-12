@@ -19,6 +19,26 @@
     -moz-osx-font-smoothing: grayscale;
   }
 
+  .skip-link {
+    position: fixed;
+    left: 1rem;
+    top: -3rem;
+    z-index: 100;
+    border-radius: 0.5rem;
+    border: 1px solid #2a2a2d;
+    background: #141416;
+    color: #f5f5f7;
+    padding: 0.5rem 0.75rem;
+    font-size: 0.875rem;
+    transition: top 0.15s ease-out;
+  }
+
+  .skip-link:focus {
+    top: 1rem;
+    outline: 2px solid #f59e0b;
+    outline-offset: 2px;
+  }
+
   /* Scrollbar sutil acorde al tema oscuro */
   ::-webkit-scrollbar {
     width: 6px;

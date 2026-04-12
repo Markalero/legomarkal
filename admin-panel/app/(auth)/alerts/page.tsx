@@ -7,15 +7,19 @@ import { Header } from "@/components/layout/Header";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
+import { ConfirmModal } from "@/components/ui/ConfirmModal";
 import { alertsApi, productsApi } from "@/lib/api-client";
-import { formatCurrency, formatDate } from "@/lib/utils";
+import { formatCurrency, formatDate, toUiError } from "@/lib/utils";
 import type { PriceAlert, Product } from "@/types";
 
 export default function AlertsPage() {
   const [alerts, setAlerts] = useState<PriceAlert[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [errorDetails, setErrorDetails] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
+  const [deleteCandidate, setDeleteCandidate] = useState<string | null>(null);
   const [productId, setProductId] = useState("");
   const [alertType, setAlertType] = useState<"PRICE_ABOVE" | "PRICE_BELOW" | "PRICE_CHANGE_PCT">("PRICE_BELOW");
   const [thresholdValue, setThresholdValue] = useState("");
@@ -23,9 +27,15 @@ export default function AlertsPage() {
 
   const load = useCallback(async () => {
     setLoading(true);
+    setError(null);
+    setErrorDetails(null);
     try {
       const data = await alertsApi.list();
       setAlerts(data);
+    } catch (e: unknown) {
+      const uiError = toUiError(e, "No se pudieron cargar las alertas.");
+      setError(uiError.message);
+      setErrorDetails(uiError.details ?? null);
     } finally {
       setLoading(false);
     }
@@ -59,13 +69,22 @@ export default function AlertsPage() {
   }, []);
 
   async function handleDelete(id: string) {
-    await alertsApi.delete(id);
-    setAlerts((prev) => prev.filter((a) => a.id !== id));
+    try {
+      await alertsApi.delete(id);
+      setAlerts((prev) => prev.filter((a) => a.id !== id));
+      setDeleteCandidate(null);
+    } catch (e: unknown) {
+      const uiError = toUiError(e, "No se pudo eliminar la alerta.");
+      setError(uiError.message);
+      setErrorDetails(uiError.details ?? null);
+    }
   }
 
   async function handleCreate() {
     if (!productId || !thresholdValue) return;
     setCreating(true);
+    setError(null);
+    setErrorDetails(null);
     try {
       const created = await alertsApi.create({
         product_id: productId,
@@ -74,6 +93,10 @@ export default function AlertsPage() {
       });
       setAlerts((prev) => [created, ...prev]);
       setThresholdValue("");
+    } catch (e: unknown) {
+      const uiError = toUiError(e, "No se pudo crear la alerta.");
+      setError(uiError.message);
+      setErrorDetails(uiError.details ?? null);
     } finally {
       setCreating(false);
     }
@@ -93,13 +116,32 @@ export default function AlertsPage() {
       />
 
       <div className="flex-1 p-6 animate-slide-up-fade">
+        {error && (
+          <div className="mb-4 rounded-lg border border-status-error/30 bg-status-error/10 px-4 py-3 text-sm text-status-error">
+            <p>{error}</p>
+            <div className="mt-2 flex flex-wrap items-center gap-3">
+              <Button type="button" variant="secondary" size="sm" onClick={load}>
+                Reintentar
+              </Button>
+              {errorDetails && (
+                <details className="text-xs text-text-secondary">
+                  <summary className="cursor-pointer">Detalle técnico</summary>
+                  <p className="mt-1 break-all">{errorDetails}</p>
+                </details>
+              )}
+            </div>
+          </div>
+        )}
+
         <Card className="mb-6 border-accent-lego/30 bg-accent-lego/5">
           <div className="mb-3 flex items-center gap-2">
             <BellPlus className="h-4 w-4 text-accent-lego" />
             <p className="text-sm font-medium text-text-primary">Crear alerta rápidamente</p>
           </div>
           <div className="grid grid-cols-1 gap-3 md:grid-cols-4">
+            <label htmlFor="alert-product" className="sr-only">Producto</label>
             <select
+              id="alert-product"
               value={productId}
               onChange={(e) => setProductId(e.target.value)}
               className="rounded-lg border border-border bg-bg-elevated px-3 py-2 text-sm text-text-primary"
@@ -111,7 +153,9 @@ export default function AlertsPage() {
                 </option>
               ))}
             </select>
+            <label htmlFor="alert-type" className="sr-only">Tipo de alerta</label>
             <select
+              id="alert-type"
               value={alertType}
               onChange={(e) =>
                 setAlertType(e.target.value as "PRICE_ABOVE" | "PRICE_BELOW" | "PRICE_CHANGE_PCT")
@@ -122,7 +166,9 @@ export default function AlertsPage() {
               <option value="PRICE_ABOVE">Precio por encima de</option>
               <option value="PRICE_CHANGE_PCT">Cambio de precio (%)</option>
             </select>
+            <label htmlFor="alert-threshold" className="sr-only">Umbral</label>
             <input
+              id="alert-threshold"
               type="number"
               value={thresholdValue}
               onChange={(e) => setThresholdValue(e.target.value)}
@@ -160,14 +206,15 @@ export default function AlertsPage() {
         ) : (
           <Card padded={false}>
             <table className="w-full text-sm">
+              <caption className="sr-only">Listado de alertas de precio configuradas</caption>
               <thead>
                 <tr className="border-b border-border bg-bg-elevated text-left text-xs text-text-muted uppercase tracking-wider">
-                  <th className="px-4 py-3">Producto</th>
-                  <th className="px-4 py-3">Tipo de alerta</th>
-                  <th className="px-4 py-3">Umbral</th>
-                  <th className="px-4 py-3">Estado</th>
-                  <th className="px-4 py-3">Último disparo</th>
-                  <th className="px-4 py-3 w-10" />
+                  <th scope="col" className="px-4 py-3">Producto</th>
+                  <th scope="col" className="px-4 py-3">Tipo de alerta</th>
+                  <th scope="col" className="px-4 py-3">Umbral</th>
+                  <th scope="col" className="px-4 py-3">Estado</th>
+                  <th scope="col" className="px-4 py-3">Último disparo</th>
+                  <th scope="col" className="px-4 py-3 w-10"><span className="sr-only">Acciones</span></th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
@@ -200,7 +247,8 @@ export default function AlertsPage() {
                         variant="ghost"
                         size="sm"
                         className="h-8 w-8 p-0 hover:text-status-error"
-                        onClick={() => handleDelete(alert.id)}
+                        onClick={() => setDeleteCandidate(alert.id)}
+                        aria-label="Eliminar alerta"
                       >
                         <Trash2 className="h-4 w-4" />
                       </Button>
@@ -211,6 +259,19 @@ export default function AlertsPage() {
             </table>
           </Card>
         )}
+
+        <ConfirmModal
+          open={deleteCandidate !== null}
+          title="Eliminar alerta"
+          message="¿Seguro que quieres eliminar esta alerta?"
+          confirmLabel="Eliminar"
+          onConfirm={() => {
+            if (deleteCandidate) {
+              handleDelete(deleteCandidate);
+            }
+          }}
+          onCancel={() => setDeleteCandidate(null)}
+        />
       </div>
     </div>
   );

@@ -2,7 +2,6 @@
 "use client";
 import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import Link from "next/link";
 import { Edit, Trash2, Tag, BellPlus } from "lucide-react";
 import { Header } from "@/components/layout/Header";
 import { Card, CardHeader, CardTitle } from "@/components/ui/Card";
@@ -186,12 +185,15 @@ export default function ProductDetailPage({ params }: Props) {
                   {product.condition && (
                     <Badge variant="neutral">{conditionLabel(product.condition)}</Badge>
                   )}
-                  <Link href={`/inventory/${params.id}/edit`}>
-                    <Button variant="secondary" size="sm">
-                      <Edit className="h-4 w-4" />
-                      Editar
-                    </Button>
-                  </Link>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => router.push(`/inventory/${params.id}/edit`)}
+                  >
+                    <Edit className="h-4 w-4" />
+                    Editar
+                  </Button>
                   <Button variant="danger" size="sm" onClick={() => setConfirmDeleteOpen(true)} loading={deleting}>
                     <Trash2 className="h-4 w-4" />
                     Eliminar
@@ -217,6 +219,9 @@ export default function ProductDetailPage({ params }: Props) {
                     <button
                       type="button"
                       onClick={handleToggleAvailability}
+                      role="switch"
+                      aria-checked={!isSold}
+                      aria-label={isSold ? "Marcar como disponible" : "Marcar como vendido"}
                       className={`relative inline-flex h-7 w-14 items-center rounded-full transition-colors ${
                         isSold ? "bg-status-error" : "bg-status-success"
                       }`}

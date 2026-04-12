@@ -18,12 +18,15 @@ const LABELS: Record<RangeKey, string> = {
 export function ChartRangeSelector({ value = "6m", onChange }: Props) {
   const id = useId();
   return (
-    <div className="inline-flex items-center gap-2">
+    <div className="inline-flex items-center gap-2" role="radiogroup" aria-label="Rango temporal de la grafica">
       {(["1m", "3m", "6m", "all"] as RangeKey[]).map((k) => (
         <button
           key={k}
           id={`${id}-${k}`}
           type="button"
+          role="radio"
+          aria-checked={value === k}
+          aria-label={LABELS[k]}
           onClick={() => onChange?.(k)}
           className={`px-3 py-1 rounded-md text-xs font-medium transition-colors ${
             value === k
