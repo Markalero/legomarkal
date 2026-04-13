@@ -195,6 +195,7 @@ class ProductService:
                 product_id=product_id,
                 source="bricklink",
                 points=live_price.monthly_history,
+                prune_missing_months=False,
             )
 
         price_service.save_price(db, product_id, "bricklink", payload)

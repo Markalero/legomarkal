@@ -356,12 +356,15 @@ class PriceService:
         product_id: UUID,
         source: str,
         points: list[dict],
-        prune_missing_months: bool = True,
+        prune_missing_months: bool = False,
     ) -> int:
         """Persiste histórico mensual real sin interpolaciones.
 
         Se hace upsert por producto+fuente+fecha (día), manteniendo un único
         snapshot por mes cuando la fuente proporciona ese punto.
+
+        Por defecto NO se podan fechas históricas ausentes para evitar borrar
+        snapshots diarios válidos generados por scraping en días anteriores.
         """
         if not points:
             return 0
@@ -401,6 +404,12 @@ class PriceService:
             )
             for row in stale_rows:
                 row_date = row.fetched_at.date() if isinstance(row.fetched_at, datetime) else None
+                if row_date is None:
+                    continue
+                # Solo poda snapshots de cierre mensual; las muestras diarias
+                # deben mantenerse para conservar el histórico real día a día.
+                if row_date.day != calendar.monthrange(row_date.year, row_date.month)[1]:
+                    continue
                 if row_date not in keep_dates:
                     db.delete(row)
 

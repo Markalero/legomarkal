@@ -12,7 +12,7 @@ import { RefreshPricesButton } from "@/components/ui/RefreshPricesButton";
 import { useRefreshProgress } from "@/lib/useRefreshProgress";
 import { RefreshProgressOverlay } from "@/components/ui/RefreshProgressOverlay";
 import { dashboardApi, alertsApi, productsApi } from "@/lib/api-client";
-import { formatCurrency, formatPct, toUiError } from "@/lib/utils";
+import { formatCurrency, formatPct, toUiError, cn } from "@/lib/utils";
 import type { DashboardSummary, TopMarginProduct, PriceTrendPoint, PriceAlert, RealProfitSummary } from "@/types";
 
 export default function DashboardPage() {
@@ -201,7 +201,14 @@ export default function DashboardPage() {
                       <p className="truncate text-sm text-text-primary">{p.name}</p>
                       <p className="text-xs text-text-muted">{p.set_number ?? "—"}</p>
                     </div>
-                    <span className="text-sm font-semibold text-status-success">
+                    <span
+                      className={cn(
+                        "text-sm font-semibold",
+                        p.margin_pct !== null && p.margin_pct !== undefined && p.margin_pct > 0 && "text-status-success",
+                        p.margin_pct !== null && p.margin_pct !== undefined && p.margin_pct < 0 && "text-status-error",
+                        (p.margin_pct === null || p.margin_pct === undefined || p.margin_pct === 0) && "text-text-muted"
+                      )}
+                    >
                       {formatPct(p.margin_pct)}
                     </span>
                   </li>

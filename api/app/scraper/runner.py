@@ -34,6 +34,7 @@ async def _run_scrapers_for_product(db, product: Product) -> None:
                         product_id=product.id,
                         source=data.source,
                         points=data.monthly_history,
+                        prune_missing_months=False,
                     )
 
                 price_service.save_price(

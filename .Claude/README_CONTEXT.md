@@ -1,10 +1,14 @@
 # README_CONTEXT
  
-Fecha de actualización: 2026-04-12 (sistema de notificaciones flotantes toast: ToastContext/ToastProvider/useToast/useToastState en lib/toast-context.tsx, Toast.tsx y ToastContainer.tsx en components/ui; corrección bug exportación backup (anchor sin DOM + revokeObjectURL síncrono); progreso predictivo por fases para descarga desde Supabase; toasts de éxito/error en alertas, productos, importación y reset)
+Fecha de actualización: 2026-04-14 (fix de persistencia histórica diaria: save_monthly_history_points deja de podar por defecto fechas ausentes y evita borrar snapshots diarios al refrescar precios)
 
 ---
 
 ## Últimos cambios detectados
+
+- **Fecha**: 2026-04-14 — fix de persistencia histórica diaria en precios.
+- **Corrección crítica (retención de histórico)**: `save_monthly_history_points` en `api/app/services/price_service.py` deja de podar por defecto fechas ausentes del histórico mensual de BrickLink, evitando que desaparezcan snapshots diarios válidos (p. ej. día 12 al entrar el día 13). Se mantiene opción de poda solo bajo uso explícito y limitada a cierres de mes.
+- **Llamadas endurecidas**: `api/app/scraper/runner.py` y `api/app/services/product_service.py` pasan explícitamente `prune_missing_months=False` al guardar `monthly_history`.
 
 - **Fecha**: 2026-04-12 — resumen de cambios frontend recientes.
 - **Fixes aplicados (auditoria UI/A11Y)**: mejoras transversales en `Modal` (role dialog, aria-modal, trap de foco, restauracion de foco y cierre accesible), `Input` (aria-invalid + aria-describedby), `ChartRangeSelector` (radiogroup + estado ARIA), tablas con `caption/scope`, filas clicables accesibles por teclado en inventario/precios, reemplazo de `confirm()` nativo en recibos por `ConfirmModal`, `skip-link` global, mensajes de error mas amigables con detalle tecnico opcional y sidebar responsive con drawer movil.
