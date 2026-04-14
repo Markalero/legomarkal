@@ -1,9 +1,10 @@
 // Lista de recibos de venta adjuntos a un producto vendido
 "use client";
-import { useState } from "react";
-import { Download, FileText, Trash2 } from "lucide-react";
+import { useState, useRef } from "react";
+import { Download, FileText, Trash2, Upload } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { ConfirmModal } from "@/components/ui/ConfirmModal";
+import { Modal } from "@/components/ui/Modal";
 import { productsApi } from "@/lib/api-client";
 import type { SaleReceipt } from "@/types";
 
@@ -18,6 +19,13 @@ export function SaleReceiptList({ productId, receipts, onUpdate }: SaleReceiptLi
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [receiptToDelete, setReceiptToDelete] = useState<SaleReceipt | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const inputRef = useRef<HTMLInputElement | null>(null);
+
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [previewingReceipt, setPreviewingReceipt] = useState<SaleReceipt | null>(null);
+  const [previewingId, setPreviewingId] = useState<string | null>(null);
 
   async function handleDownload(receipt: SaleReceipt) {
     setDownloadingId(receipt.id);
@@ -50,9 +58,53 @@ export function SaleReceiptList({ productId, receipts, onUpdate }: SaleReceiptLi
       setDeletingId(null);
     }
   }
+  async function handleUpload(files: FileList | null) {
+    if (!files || files.length === 0) return;
+    const pdfs = Array.from(files).filter(
+      (f) => f.type === "application/pdf" || f.name.toLowerCase().endsWith(".pdf")
+    );
+    if (pdfs.length !== files.length) {
+      setUploadError("Solo se aceptan archivos PDF.");
+    } else {
+      setUploadError(null);
+    }
 
-  if (receipts.length === 0) {
-    return <p className="text-sm text-text-muted">Sin recibos adjuntos.</p>;
+    setUploading(true);
+    try {
+      const updated = await productsApi.uploadSaleReceipts(productId, pdfs);
+      onUpdate(updated.sale_receipts || []);
+    } catch (e: unknown) {
+      setUploadError(e instanceof Error ? e.message : "Error al subir recibos.");
+    } finally {
+      setUploading(false);
+      if (inputRef.current) inputRef.current.value = "";
+    }
+  }
+
+  async function handlePreview(receipt: SaleReceipt) {
+    setPreviewingId(receipt.id);
+    setPreviewingReceipt(receipt);
+    try {
+      const blob = await productsApi.downloadSaleReceipt(productId, receipt.id);
+      const url = URL.createObjectURL(blob);
+      setPreviewUrl(url);
+    } catch (e: unknown) {
+      // Si hay error, mostrarlo como alert básico (no crítico)
+      alert(e instanceof Error ? e.message : "No se pudo cargar la previsualización.");
+      setPreviewingReceipt(null);
+    } finally {
+      setPreviewingId(null);
+    }
+  }
+
+  function closePreview() {
+    if (previewUrl) {
+      try {
+        URL.revokeObjectURL(previewUrl);
+      } catch {}
+    }
+    setPreviewUrl(null);
+    setPreviewingReceipt(null);
   }
 
   return (
@@ -66,42 +118,94 @@ export function SaleReceiptList({ productId, receipts, onUpdate }: SaleReceiptLi
         onCancel={() => setReceiptToDelete(null)}
       />
 
-      <ul className="space-y-2">
-        {receipts.map((receipt) => (
-          <li
-            key={receipt.id}
-            className="flex items-center justify-between rounded-lg bg-bg-elevated px-3 py-2 text-sm"
+      <Modal open={!!previewUrl} onClose={closePreview} title={previewingReceipt?.filename}>
+        <div className="h-[70vh]">
+          {previewUrl ? (
+            <iframe src={previewUrl} title={previewingReceipt?.filename} className="w-full h-full" />
+          ) : (
+            <p className="text-sm text-text-muted">Cargando previsualización…</p>
+          )}
+        </div>
+        <div className="flex justify-end gap-2 mt-3">
+          <Button variant="ghost" size="sm" onClick={closePreview}>
+            Cerrar
+          </Button>
+          <Button
+            size="sm"
+            onClick={() => previewingReceipt && handleDownload(previewingReceipt)}
+            loading={downloadingId === previewingReceipt?.id}
           >
-            <span className="flex min-w-0 items-center gap-2 text-text-secondary">
-              <FileText className="h-4 w-4 flex-shrink-0 text-accent-lego" />
-              <span className="truncate">{receipt.filename}</span>
-            </span>
-            <div className="ml-2 flex flex-shrink-0 gap-1">
-              <Button
-                variant="ghost"
-                size="sm"
-                loading={downloadingId === receipt.id}
-                onClick={() => handleDownload(receipt)}
-                title="Descargar"
-                aria-label="Descargar recibo"
+            Descargar
+          </Button>
+        </div>
+      </Modal>
+
+      <div className="space-y-2">
+        <div className="flex items-start gap-2">
+          <input
+            ref={inputRef}
+            type="file"
+            accept=".pdf,application/pdf"
+            multiple
+            className="hidden"
+            onChange={(e) => {
+              handleUpload(e.target.files);
+            }}
+          />
+          <Button variant="secondary" size="sm" onClick={() => inputRef.current?.click()} loading={uploading}>
+            <Upload className="h-4 w-4" />
+            Añadir recibo
+          </Button>
+          {uploadError && <p className="text-xs text-status-error">{uploadError}</p>}
+        </div>
+
+        {receipts.length === 0 ? (
+          <p className="text-sm text-text-muted">Sin recibos adjuntos.</p>
+        ) : (
+          <ul className="space-y-2">
+            {receipts.map((receipt) => (
+              <li
+                key={receipt.id}
+                className="flex items-center justify-between rounded-lg bg-bg-elevated px-3 py-2 text-sm"
               >
-                <Download className="h-4 w-4" />
-              </Button>
-              <Button
-                variant="ghost"
-                size="sm"
-                loading={deletingId === receipt.id}
-                onClick={() => setReceiptToDelete(receipt)}
-                title="Eliminar recibo"
-                aria-label="Eliminar recibo"
-                className="text-status-error hover:text-status-error"
-              >
-                <Trash2 className="h-4 w-4" />
-              </Button>
-            </div>
-          </li>
-        ))}
-      </ul>
+                <button
+                  type="button"
+                  onClick={() => handlePreview(receipt)}
+                  title="Previsualizar recibo"
+                  aria-label={`Previsualizar ${receipt.filename}`}
+                  className="flex min-w-0 items-center gap-2 text-text-secondary text-left"
+                >
+                  <FileText className="h-4 w-4 flex-shrink-0 text-accent-lego" />
+                  <span className="truncate">{receipt.filename}</span>
+                </button>
+                <div className="ml-2 flex flex-shrink-0 gap-1">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    loading={downloadingId === receipt.id}
+                    onClick={() => handleDownload(receipt)}
+                    title="Descargar"
+                    aria-label="Descargar recibo"
+                  >
+                    <Download className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    loading={deletingId === receipt.id}
+                    onClick={() => setReceiptToDelete(receipt)}
+                    title="Eliminar recibo"
+                    aria-label="Eliminar recibo"
+                    className="text-status-error hover:text-status-error"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
     </>
   );
 }
