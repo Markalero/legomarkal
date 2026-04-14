@@ -1,5 +1,6 @@
 # Router del dashboard — KPIs, top margen y tendencias de precio
-from typing import List
+from typing import List, Optional
+from uuid import UUID
 
 from fastapi import APIRouter, BackgroundTasks, Depends
 from sqlalchemy.orm import Session
@@ -14,7 +15,7 @@ from app.schemas.price import (
     RealProfitSummary,
     TopMarginProduct,
 )
-from app.services.price_service import dashboard_service
+from app.services.price_service import dashboard_service, price_service
 
 router = APIRouter(prefix="/dashboard", tags=["dashboard"])
 
@@ -76,3 +77,19 @@ def refresh_all_scraper(_: str = Depends(get_current_user)):
         "message": "Refresco completo de precios finalizado",
         **result,
     }
+
+
+@scraper_router.post("/backfill-daily")
+def backfill_daily(
+    product_id: Optional[UUID] = None,
+    months: int = 6,
+    db: Session = Depends(get_db),
+    _: str = Depends(get_current_user),
+):
+    """Endpoint admin: rellena histórico diario interpolado desde puntos mensuales.
+
+    - Si `product_id` no se pasa, procesa todos los productos con `set_number`.
+    - `months` controla cuántos meses hacia atrás se consideran.
+    """
+    created = price_service.backfill_daily_from_monthly(db, product_id=product_id, months=months)
+    return {"message": "Backfill diario completado", "created_rows": created}

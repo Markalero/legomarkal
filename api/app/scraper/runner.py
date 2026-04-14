@@ -28,15 +28,6 @@ async def _run_scrapers_for_product(db, product: Product) -> None:
         try:
             data = await scraper.fetch_with_retry(product.set_number)
             if data:
-                if getattr(data, "monthly_history", None):
-                    price_service.save_monthly_history_points(
-                        db,
-                        product_id=product.id,
-                        source=data.source,
-                        points=data.monthly_history,
-                        prune_missing_months=False,
-                    )
-
                 price_service.save_price(
                     db,
                     product_id=product.id,
@@ -59,12 +50,11 @@ async def _run_scrapers_for_product(db, product: Product) -> None:
 
 
 def scrape_all_products() -> None:
-    """Scraping completo — itera todos los productos activos. Llamado por APScheduler."""
+    """Scraping completo — itera todos los productos con set_number. Llamado por APScheduler."""
     db = SessionLocal()
     try:
         products = db.query(Product).filter(
             Product.deleted_at.is_(None),
-            Product.availability == "available",
             Product.set_number.isnot(None),
         ).all()
         logger.info(f"Iniciando scraping para {len(products)} productos")

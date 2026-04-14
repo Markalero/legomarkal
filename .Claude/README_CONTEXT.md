@@ -1,10 +1,22 @@
 # README_CONTEXT
  
-Fecha de actualización: 2026-04-14 (fix subida PDF recibos + backup incluye PDFs: StorageService migrado a filesystem local, supabase SDK eliminado, descarga con blob auth)
+Fecha de actualización: 2026-04-14 (alineación flujo scraping: import 6m, scraping diario para todos los productos, refresco manual + rebuild cartera)
 
 ---
 
 ## Últimos cambios detectados
+
+- **Fecha**: 2026-04-14 — alineación del sistema de scraping con especificación funcional.
+- **Importación/alta de producto** (`api/app/services/product_service.py`):
+	- el histórico mensual se limita a los **últimos 6 meses completos** (sin mes actual),
+	- se mantiene una única muestra por mes,
+	- si faltan meses, se completa base de contexto con seed mensual de 6 meses.
+- **Scraping diario/manual** (`api/app/scraper/runner.py`):
+	- se elimina el filtro `availability == "available"`,
+	- ahora el refresco diario recorre **todos los productos con `set_number`**,
+	- el runner diario persiste snapshot actual (sin reescribir mensual histórico en cada pasada).
+- **Consistencia de seed por set duplicado** (`api/app/services/price_service.py`):
+	- `seed_last_six_months_history` guarda sobre `product_id` canónico por `set_number` para evitar series duplicadas.
 
 - **Fecha**: 2026-04-14 — fix de subida de PDF en ventas y backup de recibos.
 - **Causa raíz del fallo de subida**: `StorageService` usaba el SDK de Supabase Storage con `SUPABASE_SERVICE_KEY` vacía → la petición colgaba en Render → conexión TCP cortada → browser recibía error de red "No se pudo conectar".
@@ -63,7 +75,7 @@ Se recomienda revisar las nuevas piezas UI y el hook `useRefreshProgress` para i
 - Limpieza operativa aplicada tras migración de rangos: vaciado de `market_prices` y `portfolio_daily_snapshots` para regenerar histórico consistente con el nuevo esquema.
 - API de precios ampliada con histórico por producto: `GET /market-prices/{product_id}/trend?months=6&guide_type=sold`.
 - Históricos mensuales por producto ahora se rellenan con datos reales del Price Guide de BrickLink (meses disponibles), sin interpolación/siembra artificial; si falta un mes, se omite.
-- Historial de precios sin backfill sintético: solo snapshots reales guardados desde scraper/importación.
+- Historial de alta/importación: 6 meses de base mensual (cierre de mes, sin mes actual), priorizando puntos reales de BrickLink y completando faltantes para mantener contexto visual.
 - Cálculo de valor de mercado ajustado por estado: `SEALED => price_new`, `OPEN_COMPLETE/OPEN_INCOMPLETE => price_used`.
 - Dashboard alineado con inventario al seleccionar siempre el último snapshot válido por condición (`SEALED` requiere `price_new`, abierto requiere `price_used`), evitando excluir sets con precio parcial en el último scrape.
 - Evolución del dashboard endurecida: reconstrucción completa de `portfolio_daily_snapshots` en la consulta de tendencias para corregir históricos heredados por lógica anterior.

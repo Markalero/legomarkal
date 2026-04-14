@@ -504,6 +504,7 @@ class PriceService:
         if months <= 0:
             return
 
+        storage_product_id = self._resolve_storage_product_id(db, product_id)
         today = datetime.now(timezone.utc).date()
         normalized_data = {**data, "currency": "EUR"}
 
@@ -524,7 +525,7 @@ class PriceService:
             existing = (
                 db.query(MarketPrice)
                 .filter(
-                    MarketPrice.product_id == product_id,
+                    MarketPrice.product_id == storage_product_id,
                     MarketPrice.source == source,
                     cast(MarketPrice.fetched_at, SADate) == month_end,
                 )
@@ -565,7 +566,7 @@ class PriceService:
             else:
                 db.add(
                     MarketPrice(
-                        product_id=product_id,
+                        product_id=storage_product_id,
                         source=source,
                         price_new=month_price_new,
                         price_used=month_price_used,

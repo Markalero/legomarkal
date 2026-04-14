@@ -1,6 +1,6 @@
 # Lógica de negocio para productos y categorías — desacoplada de los routers
 import asyncio
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 import math
 import re
 from typing import Optional
@@ -18,6 +18,40 @@ class ProductService:
     """Gestiona operaciones CRUD y consultas de inventario sobre la tabla products."""
 
     SET_NUMBER_QUERY_REGEX = re.compile(r"^(\d{3,8})(?:-\d+)?$")
+
+    def _monthly_points_last_six_complete_months(self, points: list[dict]) -> list[dict]:
+        """Filtra puntos mensuales al rango de los últimos 6 meses completos.
+
+        - Excluye siempre el mes actual.
+        - Mantiene una única muestra por mes (la más reciente si hubiera duplicados).
+        - Devuelve los puntos ordenados por fecha ascendente.
+        """
+        if not points:
+            return []
+
+        today = datetime.now(timezone.utc).date()
+        current_month_index = today.year * 12 + today.month
+        lower_bound = current_month_index - 6
+
+        by_month: dict[tuple[int, int], dict] = {}
+        for point in points:
+            fetched_at = point.get("fetched_at")
+            if not isinstance(fetched_at, datetime):
+                continue
+
+            d = fetched_at.date()
+            month_index = d.year * 12 + d.month
+
+            # Incluye exactamente los 6 meses completos anteriores al actual.
+            if month_index < lower_bound or month_index >= current_month_index:
+                continue
+
+            key = (d.year, d.month)
+            existing = by_month.get(key)
+            if existing is None or fetched_at > existing["fetched_at"]:
+                by_month[key] = point
+
+        return sorted(by_month.values(), key=lambda p: p["fetched_at"])
 
     @classmethod
     def _normalize_set_for_query(cls, set_number: str) -> str:
@@ -189,13 +223,27 @@ class ProductService:
             "fetched_at": datetime.now(timezone.utc),
         }
 
-        if getattr(live_price, "monthly_history", None):
+        monthly_points = self._monthly_points_last_six_complete_months(
+            getattr(live_price, "monthly_history", [])
+        )
+        if monthly_points:
             price_service.save_monthly_history_points(
                 db,
                 product_id=product_id,
                 source="bricklink",
-                points=live_price.monthly_history,
+                points=monthly_points,
                 prune_missing_months=False,
+            )
+
+        # Si la fuente no devolvió puntos mensuales suficientes, crea la base de 6
+        # meses previos para que la gráfica nazca con contexto desde el alta/import.
+        if len(monthly_points) < 6:
+            price_service.seed_last_six_months_history(
+                db,
+                product_id=product_id,
+                source="bricklink",
+                data=payload,
+                months=6,
             )
 
         price_service.save_price(db, product_id, "bricklink", payload)
