@@ -115,7 +115,7 @@ export function SaleReceiptList({ productId, receipts, onUpdate }: SaleReceiptLi
         onCancel={() => setReceiptToDelete(null)}
       />
 
-      <Modal open={!!previewUrl} onClose={closePreview} title={previewingReceipt?.filename}>
+      <Modal open={!!previewUrl} onClose={closePreview} title={previewingReceipt?.filename} className="max-w-4xl">
         <div className="h-[70vh]">
           {previewUrl ? (
             <iframe src={previewUrl} title={previewingReceipt?.filename} className="w-full h-full" />
@@ -138,26 +138,32 @@ export function SaleReceiptList({ productId, receipts, onUpdate }: SaleReceiptLi
       </Modal>
 
       <div className="space-y-2">
-        <div className="flex items-start gap-2">
-          <input
-            ref={inputRef}
-            type="file"
-            accept=".pdf,application/pdf"
-            multiple
-            className="hidden"
-            onChange={(e) => {
-              handleUpload(e.target.files);
-            }}
-          />
-          <Button variant="secondary" size="sm" onClick={() => inputRef.current?.click()} loading={uploading}>
-            <Upload className="h-4 w-4" />
-            Añadir recibo
-          </Button>
-          {uploadError && <p className="text-xs text-status-error">{uploadError}</p>}
-        </div>
-
         {receipts.length === 0 ? (
-          <p className="text-sm text-text-muted">Sin recibos adjuntos.</p>
+          <>
+            <p className="text-sm text-text-muted">Sin recibos adjuntos.</p>
+
+            <div className="mt-1">
+              <input
+                ref={inputRef}
+                type="file"
+                accept=".pdf,application/pdf"
+                multiple
+                className="hidden"
+                onChange={(e) => {
+                  handleUpload(e.target.files);
+                }}
+              />
+              <button
+                type="button"
+                onClick={() => inputRef.current?.click()}
+                className="flex w-full items-center gap-2 rounded-lg bg-bg-elevated px-3 py-2 text-sm text-text-secondary"
+                aria-label="Añadir recibo"
+              >
+                <Upload className="h-4 w-4 flex-shrink-0 text-accent-lego" />
+                <span className="truncate">Añadir recibo</span>
+              </button>
+            </div>
+          </>
         ) : (
           <ul className="space-y-2">
             {receipts.map((receipt) => (
@@ -200,8 +206,33 @@ export function SaleReceiptList({ productId, receipts, onUpdate }: SaleReceiptLi
                 </div>
               </li>
             ))}
+
+            {/* Botón igual que un recuadro de recibo, colocado al final */}
+            <li className="flex items-center justify-between rounded-lg bg-bg-elevated px-3 py-2 text-sm">
+              <input
+                ref={inputRef}
+                type="file"
+                accept=".pdf,application/pdf"
+                multiple
+                className="hidden"
+                onChange={(e) => {
+                  handleUpload(e.target.files);
+                }}
+              />
+              <button
+                type="button"
+                onClick={() => inputRef.current?.click()}
+                className="flex min-w-0 items-center gap-2 text-text-secondary w-full text-left"
+                aria-label="Añadir recibo"
+              >
+                <Upload className="h-4 w-4 flex-shrink-0 text-accent-lego" />
+                <span className="truncate">Añadir recibo</span>
+              </button>
+            </li>
           </ul>
         )}
+
+        {uploadError && <p className="text-xs text-status-error">{uploadError}</p>}
       </div>
     </>
   );
