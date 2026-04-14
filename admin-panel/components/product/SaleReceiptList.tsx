@@ -156,10 +156,16 @@ export function SaleReceiptList({ productId, receipts, onUpdate }: SaleReceiptLi
               <button
                 type="button"
                 onClick={() => inputRef.current?.click()}
-                className="flex w-full items-center gap-2 rounded-lg bg-bg-elevated px-3 py-2 text-sm text-text-secondary"
+                className="flex w-full items-center gap-2 rounded-lg bg-bg-elevated px-3 py-2 text-sm text-text-secondary disabled:opacity-60 disabled:cursor-not-allowed"
                 aria-label="Añadir recibo"
+                disabled={uploading}
+                aria-busy={uploading}
               >
-                <Upload className="h-4 w-4 flex-shrink-0 text-accent-lego" />
+                {uploading ? (
+                  <span className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
+                ) : (
+                  <Upload className="h-4 w-4 flex-shrink-0 text-accent-lego" />
+                )}
                 <span className="truncate">Añadir recibo</span>
               </button>
             </div>
@@ -222,10 +228,16 @@ export function SaleReceiptList({ productId, receipts, onUpdate }: SaleReceiptLi
               <button
                 type="button"
                 onClick={() => inputRef.current?.click()}
-                className="flex min-w-0 items-center gap-2 text-text-secondary w-full text-left"
+                className="flex min-w-0 items-center gap-2 text-text-secondary w-full text-left disabled:opacity-60 disabled:cursor-not-allowed"
                 aria-label="Añadir recibo"
+                disabled={uploading}
+                aria-busy={uploading}
               >
-                <Upload className="h-4 w-4 flex-shrink-0 text-accent-lego" />
+                {uploading ? (
+                  <span className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
+                ) : (
+                  <Upload className="h-4 w-4 flex-shrink-0 text-accent-lego" />
+                )}
                 <span className="truncate">Añadir recibo</span>
               </button>
             </li>
