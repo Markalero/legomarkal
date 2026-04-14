@@ -25,7 +25,6 @@ export function SaleReceiptList({ productId, receipts, onUpdate }: SaleReceiptLi
 
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [previewingReceipt, setPreviewingReceipt] = useState<SaleReceipt | null>(null);
-  const [previewingId, setPreviewingId] = useState<string | null>(null);
 
   async function handleDownload(receipt: SaleReceipt) {
     setDownloadingId(receipt.id);
@@ -82,7 +81,6 @@ export function SaleReceiptList({ productId, receipts, onUpdate }: SaleReceiptLi
   }
 
   async function handlePreview(receipt: SaleReceipt) {
-    setPreviewingId(receipt.id);
     setPreviewingReceipt(receipt);
     try {
       const blob = await productsApi.downloadSaleReceipt(productId, receipt.id);
@@ -93,7 +91,6 @@ export function SaleReceiptList({ productId, receipts, onUpdate }: SaleReceiptLi
       alert(e instanceof Error ? e.message : "No se pudo cargar la previsualización.");
       setPreviewingReceipt(null);
     } finally {
-      setPreviewingId(null);
     }
   }
 
