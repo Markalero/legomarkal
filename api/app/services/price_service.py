@@ -743,10 +743,12 @@ class DashboardService:
 
     def _compute_current_totals(self, db: Session) -> tuple[Decimal, Decimal, Decimal]:
         """Recalcula el total actual como suma real de todos los productos activos."""
-        products = db.query(Product).filter(
-            Product.deleted_at.is_(None),
-            Product.availability == "available",
-        ).all()
+        # Incluir todos los productos (vendidos o disponibles) en la
+        # reconstrucción histórica. La inclusión real de cada producto
+        # se decide por día en el bucle siguiente usando `purchase_date`
+        # y `sold_date` para que los elementos vendidos sigan contribuyendo
+        # al histórico hasta la fecha de venta.
+        products = db.query(Product).filter(Product.deleted_at.is_(None)).all()
 
         invested_value = Decimal("0")
         market_value = Decimal("0")
@@ -835,6 +837,18 @@ class DashboardService:
 
             for product in products:
                 qty = Decimal(str(product.quantity or 1))
+
+                # Determinar si el producto estaba en posesión ese día:
+                # - Si tiene `purchase_date` y el día es anterior, no cuenta.
+                # - Si tiene `sold_date` y el día es >= sold_date, ya no cuenta
+                #   (comportamiento: la fecha de venta excluye el día de la venta).
+                purchase_date = product.purchase_date
+                sold_date = product.sold_date
+                if purchase_date and day < purchase_date:
+                    continue
+                if sold_date and day >= sold_date:
+                    continue
+
                 invested_value += Decimal(str(product.purchase_price or 0)) * qty
 
                 history = product_histories.get((product.set_number or "").strip(), [])
