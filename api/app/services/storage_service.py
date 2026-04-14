@@ -1,22 +1,21 @@
-# Servicio de almacenamiento de recibos PDF en Supabase Storage
+# Servicio de almacenamiento de recibos PDF en sistema de ficheros local
 import uuid
 from datetime import datetime, timezone
-
-from supabase import create_client, Client
+from pathlib import Path
 
 
 class StorageService:
-    """Gestiona ficheros de recibos de venta en el bucket 'receipts' (privado) de Supabase.
+    """Gestiona ficheros de recibos PDF en el sistema de ficheros local.
 
-    Usa la Service Role Key para operar sobre un bucket privado desde el backend.
-    Las URLs de descarga son firmadas con TTL de 1 hora y se generan bajo demanda.
+    Almacena los PDFs bajo uploads/receipts/{product_id}/{receipt_id}_{filename}
+    y los sirve a través del montaje estático /uploads del servidor FastAPI.
+    Este enfoque es consistente con el almacenamiento de imágenes de producto
+    y elimina la dependencia de servicios externos de almacenamiento en la nube.
     """
 
-    BUCKET = "receipts"
-
     def __init__(self) -> None:
-        from app.config import settings
-        self._client: Client = create_client(settings.supabase_url, settings.supabase_service_key)
+        self._base_dir = Path(__file__).resolve().parents[2] / "uploads" / "receipts"
+        self._base_dir.mkdir(parents=True, exist_ok=True)
 
     def upload_receipt(
         self,
@@ -25,32 +24,27 @@ class StorageService:
         filename: str,
         content_type: str,
     ) -> dict:
-        """Sube un PDF al bucket y devuelve los metadatos para persistir en JSONB."""
+        """Guarda el PDF en disco y devuelve los metadatos para persistir en JSONB."""
         receipt_id = str(uuid.uuid4())
-        storage_path = f"{product_id}/{receipt_id}_{filename}"
-        self._client.storage.from_(self.BUCKET).upload(
-            storage_path,
-            file_bytes,
-            {"content-type": content_type, "upsert": "false"},
-        )
+        safe_filename = f"{receipt_id}_{filename}"
+        product_dir = self._base_dir / product_id
+        product_dir.mkdir(parents=True, exist_ok=True)
+        (product_dir / safe_filename).write_bytes(file_bytes)
         return {
             "id": receipt_id,
             "filename": filename,
-            "storage_path": storage_path,
+            # Ruta relativa bajo uploads/receipts/ — usada para localizar el fichero
+            "storage_path": f"{product_id}/{safe_filename}",
             "uploaded_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
         }
 
     def delete_receipt(self, storage_path: str) -> None:
-        """Borra el fichero del bucket. No lanza excepción si ya no existe."""
+        """Borra el fichero del disco. No lanza excepción si ya no existe."""
         try:
-            self._client.storage.from_(self.BUCKET).remove([storage_path])
+            (self._base_dir / storage_path).unlink(missing_ok=True)
         except Exception:
             pass
 
-    def get_signed_url(self, storage_path: str, expires_in: int = 3600) -> str:
-        """Genera y devuelve una URL firmada válida durante `expires_in` segundos."""
-        response = self._client.storage.from_(self.BUCKET).create_signed_url(
-            storage_path, expires_in
-        )
-        # supabase-py v2: el objeto devuelto tiene atributo .signed_url
-        return response.signed_url
+    def get_local_path(self, storage_path: str) -> Path:
+        """Devuelve la ruta absoluta del fichero en disco."""
+        return self._base_dir / storage_path

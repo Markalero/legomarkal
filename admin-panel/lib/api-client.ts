@@ -167,10 +167,19 @@ export const productsApi = {
       method: "DELETE",
     }),
 
-  getSaleReceiptDownloadUrl: (id: string, receiptId: string) =>
-    request<{ url: string }>(
-      `/products/${id}/sale-receipts/${receiptId}/download`
-    ),
+  /** Descarga el PDF de recibo como Blob (requiere auth; el endpoint sirve el fichero directamente). */
+  downloadSaleReceipt: async (id: string, receiptId: string): Promise<Blob> => {
+    const token = getToken();
+    const res = await fetch(
+      `${BASE_URL}/products/${id}/sale-receipts/${receiptId}/download`,
+      { headers: token ? { Authorization: `Bearer ${token}` } : {} }
+    );
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      throw new Error(body.detail ?? `Error ${res.status}`);
+    }
+    return res.blob();
+  },
 };
 
 // ── Precios de mercado ────────────────────────────────────────────────────────

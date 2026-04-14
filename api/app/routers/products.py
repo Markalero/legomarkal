@@ -1,4 +1,5 @@
 # Router de productos — CRUD, paginación, filtros, importación, exportación y recibos PDF
+import base64
 import csv
 import io
 import json
@@ -10,7 +11,7 @@ from uuid import UUID
 from uuid import uuid4
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
-from fastapi.responses import StreamingResponse
+from fastapi.responses import FileResponse, StreamingResponse
 from sqlalchemy import Boolean, Date as SADate, Integer, Numeric, String, TIMESTAMP
 from sqlalchemy.dialects.postgresql import JSONB, UUID as PGUUID
 from sqlalchemy.orm import Session
@@ -155,7 +156,23 @@ def export_csv(db: Session = Depends(get_db), _: str = Depends(get_current_user)
 
 @router.get("/export-all")
 def export_all_data(db: Session = Depends(get_db), _: str = Depends(get_current_user)):
-    """Exporta todas las tablas de negocio y sus datos en un único JSON."""
+    """Exporta todas las tablas de negocio, sus datos y los PDFs de recibos en un único JSON."""
+    storage = StorageService()
+
+    # Recorre todos los productos y recopila los ficheros de recibo que existan en disco
+    receipt_files: list[dict[str, str]] = []
+    for product in db.query(Product).all():
+        for receipt in (product.sale_receipts or []):
+            storage_path = receipt.get("storage_path")
+            if not storage_path:
+                continue
+            file_path = storage.get_local_path(storage_path)
+            if file_path.exists():
+                receipt_files.append({
+                    "storage_path": storage_path,
+                    "content_base64": base64.b64encode(file_path.read_bytes()).decode("utf-8"),
+                })
+
     payload = {
         "format": BACKUP_FORMAT,
         "exported_at": datetime.utcnow().isoformat() + "Z",
@@ -163,6 +180,8 @@ def export_all_data(db: Session = Depends(get_db), _: str = Depends(get_current_
             table_name: [_model_to_record(row) for row in db.query(model).all()]
             for table_name, model in BACKUP_MODELS.items()
         },
+        # Lista de ficheros PDF codificados en base64 para que el backup sea autocontenido
+        "receipt_files": receipt_files,
     }
 
     output = io.StringIO()
@@ -237,10 +256,25 @@ def import_all_data(file: UploadFile = File(...), db: Session = Depends(get_db),
             "portfolio_daily_snapshots": len(snapshots_data),
         }
 
+        # Restaura los ficheros PDF si el backup los incluye (campo opcional para compatibilidad)
+        receipt_files_data = payload.get("receipt_files") or []
+        storage = StorageService()
+        restored_files = 0
+        for rf in receipt_files_data:
+            storage_path = rf.get("storage_path")
+            content_b64 = rf.get("content_base64")
+            if not storage_path or not content_b64:
+                continue
+            file_path = storage.get_local_path(storage_path)
+            file_path.parent.mkdir(parents=True, exist_ok=True)
+            file_path.write_bytes(base64.b64decode(content_b64))
+            restored_files += 1
+
         return {
             "message": "Backup importado correctamente",
             "removed": removed,
             "inserted": inserted,
+            "receipt_files_restored": restored_files,
         }
     except ValueError as exc:
         db.rollback()
@@ -399,7 +433,7 @@ def download_sale_receipt(
     db: Session = Depends(get_db),
     _: str = Depends(get_current_user),
 ):
-    """Genera una URL firmada de descarga válida durante 1 hora."""
+    """Sirve el PDF de recibo directamente como fichero descargable (requiere auth)."""
     product = product_service.get_product(db, product_id)
     if not product:
         raise HTTPException(status_code=404, detail="Producto no encontrado")
@@ -409,5 +443,12 @@ def download_sale_receipt(
     if not target:
         raise HTTPException(status_code=404, detail="Recibo no encontrado")
 
-    url = StorageService().get_signed_url(target["storage_path"])
-    return {"url": url}
+    file_path = StorageService().get_local_path(target["storage_path"])
+    if not file_path.exists():
+        raise HTTPException(status_code=404, detail="Fichero de recibo no encontrado en disco")
+
+    return FileResponse(
+        path=str(file_path),
+        media_type="application/pdf",
+        filename=target.get("filename", "recibo.pdf"),
+    )

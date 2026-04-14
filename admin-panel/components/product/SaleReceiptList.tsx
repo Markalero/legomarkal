@@ -22,8 +22,16 @@ export function SaleReceiptList({ productId, receipts, onUpdate }: SaleReceiptLi
   async function handleDownload(receipt: SaleReceipt) {
     setDownloadingId(receipt.id);
     try {
-      const { url } = await productsApi.getSaleReceiptDownloadUrl(productId, receipt.id);
-      window.open(url, "_blank", "noopener,noreferrer");
+      // El endpoint sirve el PDF directamente con auth JWT — lo descargamos como blob
+      const blob = await productsApi.downloadSaleReceipt(productId, receipt.id);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = receipt.filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
     } finally {
       setDownloadingId(null);
     }

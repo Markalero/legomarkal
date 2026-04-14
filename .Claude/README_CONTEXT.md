@@ -1,10 +1,18 @@
 # README_CONTEXT
  
-Fecha de actualización: 2026-04-14 (fix de persistencia histórica diaria: save_monthly_history_points deja de podar por defecto fechas ausentes y evita borrar snapshots diarios al refrescar precios)
+Fecha de actualización: 2026-04-14 (fix subida PDF recibos + backup incluye PDFs: StorageService migrado a filesystem local, supabase SDK eliminado, descarga con blob auth)
 
 ---
 
 ## Últimos cambios detectados
+
+- **Fecha**: 2026-04-14 — fix de subida de PDF en ventas y backup de recibos.
+- **Causa raíz del fallo de subida**: `StorageService` usaba el SDK de Supabase Storage con `SUPABASE_SERVICE_KEY` vacía → la petición colgaba en Render → conexión TCP cortada → browser recibía error de red "No se pudo conectar".
+- **StorageService reescrito** (`api/app/services/storage_service.py`): ahora almacena PDFs en `uploads/receipts/{product_id}/{receipt_id}_{filename}` en el sistema de ficheros local, igual que las imágenes. Sin dependencia externa.
+- **SDK supabase eliminado** de `api/requirements.txt` (ya no se importa en ningún fichero Python).
+- **Backup de PDFs**: `GET /products/export-all` ahora incluye campo `receipt_files` con los PDFs codificados en base64. `POST /products/import-all` restaura los ficheros a disco al importar. El backup JSON es autocontenido (tablas + recibos).
+- **Descarga de recibos**: `GET /products/{id}/sale-receipts/{receipt_id}/download` ahora sirve el PDF directamente como `FileResponse` (con auth JWT). Frontend cambia de `window.open(url)` a descarga blob en `SaleReceiptList.tsx`.
+- **Frontend**: `admin-panel/lib/api-client.ts` reemplaza `getSaleReceiptDownloadUrl` por `downloadSaleReceipt` (devuelve `Blob`). `admin-panel/components/product/SaleReceiptList.tsx` usa descarga programática con `createObjectURL`. `admin-panel/types/index.ts` añade `receipt_files_restored?: number` a `FullDataImportResult`.
 
 - **Fecha**: 2026-04-14 — fix de persistencia histórica diaria en precios.
 - **Corrección crítica (retención de histórico)**: `save_monthly_history_points` en `api/app/services/price_service.py` deja de podar por defecto fechas ausentes del histórico mensual de BrickLink, evitando que desaparezcan snapshots diarios válidos (p. ej. día 12 al entrar el día 13). Se mantiene opción de poda solo bajo uso explícito y limitada a cierres de mes.

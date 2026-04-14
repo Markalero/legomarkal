@@ -214,6 +214,7 @@ export interface FullDataImportResult {
   message: string;
   removed: Record<string, number>;
   inserted: Record<string, number>;
+  receipt_files_restored?: number;
 }
 
 export interface FullDataResetResult {
