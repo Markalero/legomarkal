@@ -6,8 +6,7 @@ echo "Installing python dependencies..."
 pip install --upgrade pip
 pip install -r requirements.txt
 
-echo "Installing playwright browsers and OS dependencies..."
+echo "Installing playwright browsers..."
 playwright install chromium
-playwright install-deps chromium
 
 echo "Build completed successfully!"
