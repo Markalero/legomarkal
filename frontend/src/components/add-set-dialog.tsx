@@ -3,7 +3,6 @@ import { useState } from "react";
 import {
   Dialog,
   DialogContent,
-  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
@@ -24,6 +23,7 @@ export function AddSetDialog() {
     product_id: "",
     name: "",
     theme: "",
+    year_eol: "",
     buy_price: "",
     msrp: "",
     target_price: "",
@@ -51,6 +51,8 @@ export function AddSetDialog() {
           name: data.name || prev.name,
           theme: data.theme !== "N/A" ? data.theme : prev.theme,
           image_url: data.image_url || prev.image_url,
+          year_eol: data.year_eol || prev.year_eol,
+          msrp: data.retail_price || prev.msrp,
         }));
       } else {
         alert("No se encontró el set en BrickEconomy o el servicio está ocupado. Intenta de nuevo en unos segundos.");
@@ -89,7 +91,7 @@ export function AddSetDialog() {
       }
 
       setOpen(false);
-      setFormData({ product_id: "", name: "", theme: "", buy_price: "", msrp: "", target_price: "", quantity: "1", condition: "MISB", notes: "", image_url: "" });
+      setFormData({ product_id: "", name: "", theme: "", year_eol: "", buy_price: "", msrp: "", target_price: "", quantity: "1", condition: "MISB", notes: "", image_url: "" });
       router.refresh();
     } catch (err) {
       console.error(err);
@@ -135,9 +137,19 @@ export function AddSetDialog() {
           </div>
 
           {formData.name && (
-            <div className="space-y-2 transition-all animate-in fade-in slide-in-from-top-2">
-              <label htmlFor="name" className="text-sm font-medium text-muted-foreground">Nombre Oficial (Extraído)</label>
-              <Input id="name" name="name" required value={formData.name} readOnly className="bg-muted/50 cursor-not-allowed border-dashed focus-visible:ring-0" />
+            <div className="flex gap-4 items-start transition-all animate-in fade-in slide-in-from-top-2">
+              {formData.image_url && (
+                <div className="w-24 h-24 rounded-lg overflow-hidden border border-border bg-white/5 flex items-center justify-center shrink-0">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={formData.image_url} alt={formData.name} className="max-w-full max-h-full object-contain" />
+                </div>
+              )}
+              <div className="flex-1 space-y-4">
+                <div className="space-y-2">
+                  <label htmlFor="name" className="text-sm font-medium text-muted-foreground">Nombre Oficial (Extraído)</label>
+                  <Input id="name" name="name" required value={formData.name} readOnly className="bg-muted/50 cursor-not-allowed border-dashed focus-visible:ring-0" />
+                </div>
+              </div>
             </div>
           )}
 
@@ -148,7 +160,13 @@ export function AddSetDialog() {
                 <Input id="theme" name="theme" value={formData.theme} readOnly className="bg-muted/50 cursor-not-allowed border-dashed focus-visible:ring-0" />
               </div>
             )}
-            <div className={`space-y-2 ${!formData.theme ? "col-span-2" : ""}`}>
+            {formData.year_eol && (
+              <div className="space-y-2 transition-all animate-in fade-in slide-in-from-right-2">
+                <label htmlFor="year_eol" className="text-sm font-medium text-muted-foreground">Año / EOL (Extraído)</label>
+                <Input id="year_eol" name="year_eol" value={formData.year_eol} readOnly className="bg-muted/50 cursor-not-allowed border-dashed focus-visible:ring-0 text-xs" />
+              </div>
+            )}
+            <div className={`space-y-2 col-span-2`}>
               <label htmlFor="condition" className="text-sm font-medium">Condición *</label>
               <select id="condition" name="condition" value={formData.condition} onChange={handleChange} className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50">
                 <option value="MISB">MISB (Nuevo y Sellado)</option>
@@ -158,7 +176,11 @@ export function AddSetDialog() {
             </div>
           </div>
 
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid grid-cols-4 gap-4">
+            <div className="space-y-2">
+              <label htmlFor="msrp" className="text-sm font-medium">PVP (€)</label>
+              <Input id="msrp" name="msrp" type="number" step="0.01" value={formData.msrp} onChange={handleChange} placeholder="0.00" />
+            </div>
             <div className="space-y-2">
               <label htmlFor="buy_price" className="text-sm font-medium">Compra (€) *</label>
               <Input id="buy_price" name="buy_price" type="number" step="0.01" required value={formData.buy_price} onChange={handleChange} placeholder="0.00" />

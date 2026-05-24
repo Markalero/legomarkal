@@ -14,6 +14,8 @@ class AutocompleteResponse(BaseModel):
     name: str
     theme: Optional[str] = None
     image_url: Optional[str] = None
+    year_eol: Optional[str] = None
+    retail_price: Optional[str] = None
 
 @router.get("/{product_id}", response_model=AutocompleteResponse)
 async def get_set_info(product_id: str):
@@ -51,11 +53,18 @@ async def get_set_info(product_id: str):
             # Try to get the image
             # Wait for img with src containing 'lego'
             image_url = None
+            theme_val = "N/A"
+            year_eol_val = ""
+            retail_price_val = ""
+
             try:
                 # Get the page html
                 html = await page.content()
                 from bs4 import BeautifulSoup
+                import re
                 soup = BeautifulSoup(html, 'html.parser')
+                
+                # Image
                 imgs = soup.find_all('img')
                 for img in imgs:
                     src = img.get('src', '')
@@ -65,14 +74,46 @@ async def get_set_info(product_id: str):
                 
                 if image_url and image_url.startswith('/'):
                     image_url = "https://www.brickeconomy.com" + image_url
-            except Exception as img_err:
-                print("Could not find image:", img_err)
+
+                # Metadata
+                data_dict = {}
+                for div in soup.find_all('div', class_='row'):
+                    cols = div.find_all('div')
+                    if len(cols) >= 2:
+                        lbl = cols[0].get_text(strip=True)
+                        val = cols[1].get_text(separator=' ', strip=True)
+                        data_dict[lbl] = val
+
+                theme = data_dict.get("Theme", "")
+                subtheme = data_dict.get("Subtheme", "")
+                if theme and subtheme:
+                    theme_val = f"{theme} / {subtheme}"
+                elif theme:
+                    theme_val = theme
+                
+                year = data_dict.get("Year", "")
+                retire = data_dict.get("Retirement", "")
+                if retire:
+                    year_eol_val = f"{year} | EOL: {retire}"
+                else:
+                    year_eol_val = year
+                    
+                retail_price_raw = data_dict.get("Retail price", "")
+                if retail_price_raw:
+                    cleaned_price = re.sub(r'[^\d.]', '', retail_price_raw)
+                    if cleaned_price:
+                        retail_price_val = cleaned_price
+
+            except Exception as metadata_err:
+                print("Could not parse metadata:", metadata_err)
 
             return AutocompleteResponse(
                 product_id=product_id,
                 name=name.strip(),
-                theme="N/A", # BrickEconomy doesn't always expose theme clearly in the title, we'd need more complex parsing
-                image_url=image_url
+                theme=theme_val,
+                image_url=image_url,
+                year_eol=year_eol_val,
+                retail_price=retail_price_val
             )
             
         except HTTPException as he:
