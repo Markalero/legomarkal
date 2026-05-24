@@ -19,7 +19,7 @@ export function AddSetDialog() {
   const [loading, setLoading] = useState(false);
   const [searching, setSearching] = useState(false);
   const router = useRouter();
-  
+
   const [formData, setFormData] = useState({
     product_id: "",
     name: "",
@@ -43,7 +43,7 @@ export function AddSetDialog() {
     try {
       const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000/api";
       const res = await fetch(`${API_URL}/autocomplete/${formData.product_id}`);
-      
+
       if (res.ok) {
         const data = await res.json();
         setFormData(prev => ({
@@ -108,28 +108,24 @@ export function AddSetDialog() {
       <DialogContent className="sm:max-w-[500px] bg-background/80 backdrop-blur-xl border-white/20 shadow-2xl">
         <DialogHeader>
           <DialogTitle>Añadir Nuevo Set</DialogTitle>
-          <DialogDescription>
-            Introduce el ID y usa la varita para autocompletar mágicamente extrayendo los datos de BrickEconomy. 
-            <br/><span className="text-amber-500 font-semibold mt-1 inline-block">⏳ Nota: El escaneo invisible puede tardar unos 5-10 segundos.</span>
-          </DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4 py-4 max-h-[70vh] overflow-y-auto px-1">
-          
+
           <div className="flex flex-col">
             <div className="flex gap-2 items-end">
               <div className="space-y-2 flex-1">
-                <label htmlFor="product_id" className="text-sm font-medium">ID del Set (EAN/SKU) *</label>
+                <label htmlFor="product_id" className="text-sm font-medium">ID del Set *</label>
                 <Input id="product_id" name="product_id" required value={formData.product_id} onChange={handleChange} placeholder="ej. 75192" />
               </div>
-              <Button type="button" variant="secondary" onClick={handleAutocomplete} disabled={searching} className="mb-[2px]">
+              <Button data-testid="autocomplete-btn" type="button" variant="secondary" onClick={handleAutocomplete} disabled={searching} className="mb-[2px]">
                 {searching ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
               </Button>
             </div>
-            
+
             {searching && (
               <div className="mt-3 space-y-1.5 transition-all animate-in fade-in slide-in-from-top-1">
                 <div className="flex justify-between text-xs text-amber-500 font-medium">
-                  <span className="flex items-center gap-1"><Loader2 className="w-3 h-3 animate-spin"/> Extrayendo datos de BrickEconomy...</span>
+                  <span className="flex items-center gap-1"><Loader2 className="w-3 h-3 animate-spin" /> Extrayendo datos de BrickEconomy...</span>
                 </div>
                 <div className="w-full bg-secondary h-1.5 rounded-full overflow-hidden">
                   <div className="bg-amber-500 h-full w-full animate-pulse"></div>
@@ -137,7 +133,7 @@ export function AddSetDialog() {
               </div>
             )}
           </div>
-          
+
           {formData.name && (
             <div className="space-y-2 transition-all animate-in fade-in slide-in-from-top-2">
               <label htmlFor="name" className="text-sm font-medium text-muted-foreground">Nombre Oficial (Extraído)</label>
@@ -176,7 +172,7 @@ export function AddSetDialog() {
               <Input id="quantity" name="quantity" type="number" min="1" required value={formData.quantity} onChange={handleChange} />
             </div>
           </div>
-          
+
           <div className="space-y-2">
             <label htmlFor="notes" className="text-sm font-medium">Notas de Condición / Desperfectos</label>
             <textarea id="notes" name="notes" value={formData.notes} onChange={handleChange} placeholder="ej. La esquina de la caja está abollada..." className="flex min-h-[60px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50" />

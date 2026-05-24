@@ -32,4 +32,36 @@ describe('AddSetDialog Component', () => {
     await userEvent.type(input, '75192');
     expect(input).toHaveValue('75192');
   });
+
+  it('fetches autocomplete data and shows readonly fields', async () => {
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        name: 'Star Wars Millennium Falcon',
+        theme: 'Star Wars',
+        image_url: 'http://example.com/falcon.jpg'
+      })
+    });
+    global.alert = vi.fn();
+
+    render(<AddSetDialog />);
+    await userEvent.click(screen.getByText('Añadir Set'));
+    
+    const idInput = screen.getByLabelText(/ID del Set/i);
+    await userEvent.type(idInput, '75192');
+    
+    const autocompleteBtn = screen.getByTestId('autocomplete-btn');
+    await userEvent.click(autocompleteBtn);
+    
+    // Check that the fields appeared and have the correct extracted values
+    const nameInput = await screen.findByLabelText(/Nombre Oficial \(Extraído\)/i);
+    expect(nameInput).toBeInTheDocument();
+    expect(nameInput).toHaveValue('Star Wars Millennium Falcon');
+    expect(nameInput).toHaveAttribute('readonly');
+    
+    const themeInput = await screen.findByLabelText(/Tema \(Extraído\)/i);
+    expect(themeInput).toBeInTheDocument();
+    expect(themeInput).toHaveValue('Star Wars');
+    expect(themeInput).toHaveAttribute('readonly');
+  });
 });
