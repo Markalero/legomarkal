@@ -155,7 +155,7 @@ export default async function DashboardPage() {
                         </div>
                         <div className="text-right">
                           <p className="font-bold text-success">€{s.current_price.toFixed(2)}</p>
-                          <p className="text-[10px] uppercase tracking-wider font-semibold text-success/70">Target: €{s.target_price.toFixed(2)}</p>
+                          <p className="text-[10px] uppercase tracking-wider font-semibold text-success/70">Target: €{s.target_price!.toFixed(2)}</p>
                         </div>
                       </div>
                     ))}
