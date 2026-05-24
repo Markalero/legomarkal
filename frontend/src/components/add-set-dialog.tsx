@@ -138,17 +138,21 @@ export function AddSetDialog() {
             )}
           </div>
           
-          <div className="space-y-2">
-            <label htmlFor="name" className="text-sm font-medium">Nombre Oficial *</label>
-            <Input id="name" name="name" required value={formData.name} onChange={handleChange} placeholder="ej. Millennium Falcon" />
-          </div>
+          {formData.name && (
+            <div className="space-y-2 transition-all animate-in fade-in slide-in-from-top-2">
+              <label htmlFor="name" className="text-sm font-medium text-muted-foreground">Nombre Oficial (Extraído)</label>
+              <Input id="name" name="name" required value={formData.name} readOnly className="bg-muted/50 cursor-not-allowed border-dashed focus-visible:ring-0" />
+            </div>
+          )}
 
           <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <label htmlFor="theme" className="text-sm font-medium">Tema</label>
-              <Input id="theme" name="theme" value={formData.theme} onChange={handleChange} placeholder="ej. Star Wars" />
-            </div>
-            <div className="space-y-2">
+            {formData.theme && (
+              <div className="space-y-2 transition-all animate-in fade-in slide-in-from-left-2">
+                <label htmlFor="theme" className="text-sm font-medium text-muted-foreground">Tema (Extraído)</label>
+                <Input id="theme" name="theme" value={formData.theme} readOnly className="bg-muted/50 cursor-not-allowed border-dashed focus-visible:ring-0" />
+              </div>
+            )}
+            <div className={`space-y-2 ${!formData.theme ? "col-span-2" : ""}`}>
               <label htmlFor="condition" className="text-sm font-medium">Condición *</label>
               <select id="condition" name="condition" value={formData.condition} onChange={handleChange} className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50">
                 <option value="MISB">MISB (Nuevo y Sellado)</option>
