@@ -1,5 +1,6 @@
 import asyncio
 import os
+import random
 import requests
 from playwright.async_api import async_playwright
 
@@ -7,7 +8,6 @@ API_BASE_URL = os.environ.get("API_BASE_URL", "http://127.0.0.1:8000/api")
 API_KEY = os.environ.get("SCRAPER_API_KEY")
 
 async def get_sets_to_scrape():
-    # In a real scenario, this would query the API for sets IN_STOCK
     print(f"Fetching sets from {API_BASE_URL}/sets/")
     try:
         response = requests.get(f"{API_BASE_URL}/sets/")
@@ -18,14 +18,22 @@ async def get_sets_to_scrape():
         return []
 
 async def scrape_lego_price(page, product_id):
-    # Dummy logic for scraping.
-    # In the real world, you'd navigate to lego.com or bricklink, search product_id, and extract price.
     print(f"Scraping price for product {product_id}...")
-    # await page.goto(f"https://www.lego.com/en-es/product/{product_id}")
-    # price_element = await page.locator("...").inner_text()
-    
-    # Simulating a fetched price
-    return {"product_id": product_id, "current_price": 99.99}
+    try:
+        # Dummy logic for scraping.
+        # In the real world, you'd navigate and extract the price here.
+        
+        # Add a random delay to prevent rate limits
+        await asyncio.sleep(random.uniform(1.0, 3.0))
+        
+        # Simulate a successful scrape 90% of the time, and a failure 10%
+        if random.random() < 0.1:
+            raise Exception("Simulated DOM change timeout")
+
+        return {"product_id": product_id, "current_price": 99.99}
+    except Exception as e:
+        print(f"Error scraping {product_id}: {e}")
+        return None
 
 async def main():
     if not API_KEY:
@@ -42,6 +50,7 @@ async def main():
         browser = await p.chromium.launch(headless=True)
         page = await browser.new_page()
         
+        # Iterate sequentially to prevent memory saturation and rate limits
         for lego_set in sets:
             if lego_set["status"] == "IN_STOCK":
                 result = await scrape_lego_price(page, lego_set["product_id"])

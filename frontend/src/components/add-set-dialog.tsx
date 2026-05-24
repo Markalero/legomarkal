@@ -11,12 +11,13 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { PackagePlus, Loader2 } from "lucide-react";
+import { PackagePlus, Loader2, Search } from "lucide-react";
 import { useRouter } from "next/navigation";
 
 export function AddSetDialog() {
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [searching, setSearching] = useState(false);
   const router = useRouter();
   
   const [formData, setFormData] = useState({
@@ -25,11 +26,46 @@ export function AddSetDialog() {
     theme: "",
     buy_price: "",
     msrp: "",
-    quantity: "1"
+    target_price: "",
+    quantity: "1",
+    condition: "MISB",
+    notes: "",
+    image_url: ""
   });
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
+  };
+
+  const handleAutocomplete = async () => {
+    if (!formData.product_id) return;
+    setSearching(true);
+    try {
+      // Rebrickable API uses {set_num}-1 format usually
+      const setNum = formData.product_id.includes("-") ? formData.product_id : `${formData.product_id}-1`;
+      // We would use process.env.NEXT_PUBLIC_REBRICKABLE_API_KEY in production
+      const apiKey = "dummy_api_key_for_now"; 
+      
+      const res = await fetch(`https://rebrickable.com/api/v3/lego/sets/${setNum}/`, {
+        headers: { "Authorization": `key ${apiKey}` }
+      });
+      
+      if (res.ok) {
+        const data = await res.json();
+        setFormData(prev => ({
+          ...prev,
+          name: data.name || prev.name,
+          image_url: data.set_img_url || prev.image_url,
+          // Rebrickable doesn't give MSRP directly here, but we could fetch it from other endpoints
+        }));
+      } else {
+        alert("No se encontró el set en Rebrickable o falta la API Key.");
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setSearching(false);
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -41,6 +77,7 @@ export function AddSetDialog() {
         ...formData,
         buy_price: parseFloat(formData.buy_price),
         msrp: formData.msrp ? parseFloat(formData.msrp) : null,
+        target_price: formData.target_price ? parseFloat(formData.target_price) : null,
         quantity: parseInt(formData.quantity, 10)
       };
 
@@ -58,7 +95,7 @@ export function AddSetDialog() {
       }
 
       setOpen(false);
-      setFormData({ product_id: "", name: "", theme: "", buy_price: "", msrp: "", quantity: "1" });
+      setFormData({ product_id: "", name: "", theme: "", buy_price: "", msrp: "", target_price: "", quantity: "1", condition: "MISB", notes: "", image_url: "" });
       router.refresh();
     } catch (err) {
       console.error(err);
@@ -74,50 +111,69 @@ export function AddSetDialog() {
         <PackagePlus className="w-4 h-4" />
         Añadir Set
       </DialogTrigger>
-      <DialogContent className="sm:max-w-[425px]">
+      <DialogContent className="sm:max-w-[500px] bg-background/80 backdrop-blur-xl border-white/20 shadow-2xl">
         <DialogHeader>
           <DialogTitle>Añadir Nuevo Set</DialogTitle>
           <DialogDescription>
-            Introduce los detalles del nuevo set de LEGO para añadirlo al inventario.
+            Introduce el ID y usa la varita para autocompletar los datos mágicamente.
           </DialogDescription>
         </DialogHeader>
-        <form onSubmit={handleSubmit} className="space-y-4 py-4">
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <label htmlFor="product_id" className="text-sm font-medium">ID del Set *</label>
+        <form onSubmit={handleSubmit} className="space-y-4 py-4 max-h-[70vh] overflow-y-auto px-1">
+          
+          <div className="flex gap-2 items-end">
+            <div className="space-y-2 flex-1">
+              <label htmlFor="product_id" className="text-sm font-medium">ID del Set (EAN/SKU) *</label>
               <Input id="product_id" name="product_id" required value={formData.product_id} onChange={handleChange} placeholder="ej. 75192" />
             </div>
+            <Button type="button" variant="secondary" onClick={handleAutocomplete} disabled={searching} className="mb-[2px]">
+              {searching ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
+            </Button>
+          </div>
+          
+          <div className="space-y-2">
+            <label htmlFor="name" className="text-sm font-medium">Nombre Oficial *</label>
+            <Input id="name" name="name" required value={formData.name} onChange={handleChange} placeholder="ej. Millennium Falcon" />
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
-              <label htmlFor="quantity" className="text-sm font-medium">Cantidad *</label>
+              <label htmlFor="theme" className="text-sm font-medium">Tema</label>
+              <Input id="theme" name="theme" value={formData.theme} onChange={handleChange} placeholder="ej. Star Wars" />
+            </div>
+            <div className="space-y-2">
+              <label htmlFor="condition" className="text-sm font-medium">Condición *</label>
+              <select id="condition" name="condition" value={formData.condition} onChange={handleChange} className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50">
+                <option value="MISB">MISB (Nuevo y Sellado)</option>
+                <option value="CIB">CIB (Abierto, Completo)</option>
+                <option value="USED">Usado / Suelto</option>
+              </select>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-3 gap-4">
+            <div className="space-y-2">
+              <label htmlFor="buy_price" className="text-sm font-medium">Compra (€) *</label>
+              <Input id="buy_price" name="buy_price" type="number" step="0.01" required value={formData.buy_price} onChange={handleChange} placeholder="0.00" />
+            </div>
+            <div className="space-y-2">
+              <label htmlFor="target_price" className="text-sm font-medium">Target (€)</label>
+              <Input id="target_price" name="target_price" type="number" step="0.01" value={formData.target_price} onChange={handleChange} placeholder="0.00" />
+            </div>
+            <div className="space-y-2">
+              <label htmlFor="quantity" className="text-sm font-medium">Cant.</label>
               <Input id="quantity" name="quantity" type="number" min="1" required value={formData.quantity} onChange={handleChange} />
             </div>
           </div>
           
           <div className="space-y-2">
-            <label htmlFor="name" className="text-sm font-medium">Nombre del Set *</label>
-            <Input id="name" name="name" required value={formData.name} onChange={handleChange} placeholder="ej. Millennium Falcon" />
-          </div>
-
-          <div className="space-y-2">
-            <label htmlFor="theme" className="text-sm font-medium">Tema</label>
-            <Input id="theme" name="theme" value={formData.theme} onChange={handleChange} placeholder="ej. Star Wars" />
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <label htmlFor="buy_price" className="text-sm font-medium">Precio Compra (€) *</label>
-              <Input id="buy_price" name="buy_price" type="number" step="0.01" required value={formData.buy_price} onChange={handleChange} placeholder="0.00" />
-            </div>
-            <div className="space-y-2">
-              <label htmlFor="msrp" className="text-sm font-medium">MSRP (€)</label>
-              <Input id="msrp" name="msrp" type="number" step="0.01" value={formData.msrp} onChange={handleChange} placeholder="0.00" />
-            </div>
+            <label htmlFor="notes" className="text-sm font-medium">Notas de Condición / Desperfectos</label>
+            <textarea id="notes" name="notes" value={formData.notes} onChange={handleChange} placeholder="ej. La esquina de la caja está abollada..." className="flex min-h-[60px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50" />
           </div>
 
           <DialogFooter className="pt-4">
             <Button type="submit" disabled={loading} className="w-full">
               {loading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
-              {loading ? "Guardando..." : "Guardar Set"}
+              {loading ? "Guardando..." : "Guardar Set en Inventario"}
             </Button>
           </DialogFooter>
         </form>
