@@ -1,4 +1,6 @@
 import { getSets } from "@/lib/api";
+import { AddSetDialog } from "@/components/add-set-dialog";
+import { ManageSetDialog } from "@/components/manage-set-dialog";
 import {
   Table,
   TableBody,
@@ -8,11 +10,11 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { PackagePlus } from "lucide-react";
+
+type LegoSet = { id: number, product_id: string, name: string, theme: string, buy_price: number, current_price: number, status: string };
 
 export default async function InventoryPage() {
-  let sets = [];
+  let sets: LegoSet[] = [];
   try {
     sets = await getSets();
   } catch (e) {
@@ -28,10 +30,7 @@ export default async function InventoryPage() {
             Gestiona tus sets de LEGO y registra tus ventas.
           </p>
         </div>
-        <Button className="gap-2">
-          <PackagePlus className="w-4 h-4" />
-          Añadir Set
-        </Button>
+        <AddSetDialog />
       </div>
 
       <div className="rounded-md border bg-card">
@@ -55,7 +54,7 @@ export default async function InventoryPage() {
                 </TableCell>
               </TableRow>
             ) : (
-              sets.map((legoSet: { id: number, product_id: string, name: string, theme: string, buy_price: number, current_price: number, status: string }) => (
+              sets.map((legoSet: LegoSet) => (
                 <TableRow key={legoSet.id}>
                   <TableCell className="font-medium text-primary">#{legoSet.product_id}</TableCell>
                   <TableCell className="font-medium">{legoSet.name}</TableCell>
@@ -70,9 +69,7 @@ export default async function InventoryPage() {
                     </Badge>
                   </TableCell>
                   <TableCell className="text-right">
-                    <Button variant="outline" size="sm">
-                      Gestionar
-                    </Button>
+                    <ManageSetDialog set={legoSet} />
                   </TableCell>
                 </TableRow>
               ))
