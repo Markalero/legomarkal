@@ -27,7 +27,7 @@ class ScrapedPrice(BaseModel):
 class WebhookPayload(BaseModel):
     prices: List[ScrapedPrice]
 
-from datetime import datetime
+from datetime import datetime, timezone
 from sqlalchemy.sql import func
 
 @router.post("/webhook", dependencies=[Depends(get_api_key)])
@@ -42,7 +42,7 @@ def receive_scraped_prices(payload: WebhookPayload, db: Session = Depends(databa
     ).all()
     
     # Ensure idempotency by tracking today's date
-    today_date = datetime.utcnow().date()
+    today_date = datetime.now(timezone.utc).date()
     updated_count = 0
     
     for db_set in db_sets:

@@ -41,10 +41,13 @@ export function AddSetDialog() {
     if (!formData.product_id) return;
     setSearching(true);
     try {
-      // Rebrickable API uses {set_num}-1 format usually
       const setNum = formData.product_id.includes("-") ? formData.product_id : `${formData.product_id}-1`;
-      // We would use process.env.NEXT_PUBLIC_REBRICKABLE_API_KEY in production
-      const apiKey = "dummy_api_key_for_now"; 
+      const apiKey = process.env.NEXT_PUBLIC_REBRICKABLE_API_KEY; 
+      
+      if (!apiKey || apiKey === "dummy_api_key_for_now") {
+        alert("Falta la API Key de Rebrickable. Regístrate en rebrickable.com/api/ y pon tu clave en la variable NEXT_PUBLIC_REBRICKABLE_API_KEY en tu .env.local o Vercel.");
+        return;
+      }
       
       const res = await fetch(`https://rebrickable.com/api/v3/lego/sets/${setNum}/`, {
         headers: { "Authorization": `key ${apiKey}` }
@@ -56,10 +59,9 @@ export function AddSetDialog() {
           ...prev,
           name: data.name || prev.name,
           image_url: data.set_img_url || prev.image_url,
-          // Rebrickable doesn't give MSRP directly here, but we could fetch it from other endpoints
         }));
       } else {
-        alert("No se encontró el set en Rebrickable o falta la API Key.");
+        alert("No se encontró el set en Rebrickable. Comprueba el ID.");
       }
     } catch (err) {
       console.error(err);
