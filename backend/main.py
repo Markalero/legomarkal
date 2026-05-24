@@ -4,7 +4,7 @@ import sys
 import traceback
 from urllib.parse import urlparse
 from database import engine, Base, DATABASE_URL
-from routers import sets, sales, metrics, scraper
+from routers import sets, sales, metrics, scraper, autocomplete
 
 # Print masked database connection info to Render logs
 try:
@@ -46,6 +46,7 @@ app.include_router(sets.router, prefix="/api")
 app.include_router(sales.router, prefix="/api")
 app.include_router(metrics.router, prefix="/api")
 app.include_router(scraper.router, prefix="/api")
+app.include_router(autocomplete.router, prefix="/api")
 
 @app.get("/")
 def read_root():

@@ -28,3 +28,9 @@ build/
 # OS
 .DS_Store
 Thumbs.db
+
+# Temporary Scripts
+brick_dump.html
+test_api.py
+test_dump.py
+parse_html.py

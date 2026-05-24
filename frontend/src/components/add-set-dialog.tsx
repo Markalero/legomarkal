@@ -41,27 +41,19 @@ export function AddSetDialog() {
     if (!formData.product_id) return;
     setSearching(true);
     try {
-      const setNum = formData.product_id.includes("-") ? formData.product_id : `${formData.product_id}-1`;
-      const apiKey = process.env.NEXT_PUBLIC_REBRICKABLE_API_KEY; 
-      
-      if (!apiKey || apiKey === "dummy_api_key_for_now") {
-        alert("Falta la API Key de Rebrickable. Regístrate en rebrickable.com/api/ y pon tu clave en la variable NEXT_PUBLIC_REBRICKABLE_API_KEY en tu .env.local o Vercel.");
-        return;
-      }
-      
-      const res = await fetch(`https://rebrickable.com/api/v3/lego/sets/${setNum}/`, {
-        headers: { "Authorization": `key ${apiKey}` }
-      });
+      const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000/api";
+      const res = await fetch(`${API_URL}/autocomplete/${formData.product_id}`);
       
       if (res.ok) {
         const data = await res.json();
         setFormData(prev => ({
           ...prev,
           name: data.name || prev.name,
-          image_url: data.set_img_url || prev.image_url,
+          theme: data.theme !== "N/A" ? data.theme : prev.theme,
+          image_url: data.image_url || prev.image_url,
         }));
       } else {
-        alert("No se encontró el set en Rebrickable. Comprueba el ID.");
+        alert("No se encontró el set en BrickEconomy o el servicio está ocupado. Intenta de nuevo en unos segundos.");
       }
     } catch (err) {
       console.error(err);
@@ -117,7 +109,8 @@ export function AddSetDialog() {
         <DialogHeader>
           <DialogTitle>Añadir Nuevo Set</DialogTitle>
           <DialogDescription>
-            Introduce el ID y usa la varita para autocompletar los datos mágicamente.
+            Introduce el ID y usa la varita para autocompletar mágicamente extrayendo los datos de BrickEconomy. 
+            <br/><span className="text-amber-500 font-semibold mt-1 inline-block">⏳ Nota: El escaneo invisible puede tardar unos 5-10 segundos.</span>
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4 py-4 max-h-[70vh] overflow-y-auto px-1">
