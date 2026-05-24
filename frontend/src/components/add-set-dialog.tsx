@@ -115,14 +115,27 @@ export function AddSetDialog() {
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4 py-4 max-h-[70vh] overflow-y-auto px-1">
           
-          <div className="flex gap-2 items-end">
-            <div className="space-y-2 flex-1">
-              <label htmlFor="product_id" className="text-sm font-medium">ID del Set (EAN/SKU) *</label>
-              <Input id="product_id" name="product_id" required value={formData.product_id} onChange={handleChange} placeholder="ej. 75192" />
+          <div className="flex flex-col">
+            <div className="flex gap-2 items-end">
+              <div className="space-y-2 flex-1">
+                <label htmlFor="product_id" className="text-sm font-medium">ID del Set (EAN/SKU) *</label>
+                <Input id="product_id" name="product_id" required value={formData.product_id} onChange={handleChange} placeholder="ej. 75192" />
+              </div>
+              <Button type="button" variant="secondary" onClick={handleAutocomplete} disabled={searching} className="mb-[2px]">
+                {searching ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
+              </Button>
             </div>
-            <Button type="button" variant="secondary" onClick={handleAutocomplete} disabled={searching} className="mb-[2px]">
-              {searching ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
-            </Button>
+            
+            {searching && (
+              <div className="mt-3 space-y-1.5 transition-all animate-in fade-in slide-in-from-top-1">
+                <div className="flex justify-between text-xs text-amber-500 font-medium">
+                  <span className="flex items-center gap-1"><Loader2 className="w-3 h-3 animate-spin"/> Extrayendo datos de BrickEconomy...</span>
+                </div>
+                <div className="w-full bg-secondary h-1.5 rounded-full overflow-hidden">
+                  <div className="bg-amber-500 h-full w-full animate-pulse"></div>
+                </div>
+              </div>
+            )}
           </div>
           
           <div className="space-y-2">

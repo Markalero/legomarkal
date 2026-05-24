@@ -17,7 +17,8 @@ class AutocompleteResponse(BaseModel):
 
 @router.get("/{product_id}", response_model=AutocompleteResponse)
 async def get_set_info(product_id: str):
-    url = f"https://www.brickeconomy.com/set/{product_id}-1/"
+    set_num = product_id if "-" in product_id else f"{product_id}-1"
+    url = f"https://www.brickeconomy.com/set/{set_num}/"
     
     async with async_playwright() as p:
         browser = await p.chromium.launch(headless=True)
