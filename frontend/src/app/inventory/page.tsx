@@ -55,7 +55,7 @@ export default async function InventoryPage() {
                 </TableCell>
               </TableRow>
             ) : (
-              sets.map((legoSet: any) => (
+              sets.map((legoSet: { id: number, product_id: string, name: string, theme: string, buy_price: number, current_price: number, status: string }) => (
                 <TableRow key={legoSet.id}>
                   <TableCell className="font-medium text-primary">#{legoSet.product_id}</TableCell>
                   <TableCell className="font-medium">{legoSet.name}</TableCell>

@@ -21,14 +21,7 @@ export default function RootLayout({
       <body suppressHydrationWarning className={`${inter.className} flex h-screen bg-background overflow-hidden`}>
         {/* Sidebar */}
         <aside className="w-64 border-r bg-card flex flex-col">
-          <div className="h-16 flex items-center px-6 border-b">
-            <div className="flex items-center gap-2 text-primary font-bold text-xl tracking-tight">
-              <div className="w-8 h-8 rounded bg-primary text-primary-foreground flex items-center justify-center font-black">
-                L
-              </div>
-              <span>Stock Manager</span>
-            </div>
-          </div>
+
           <nav className="flex-1 p-4 space-y-2">
             <Link href="/" className="flex items-center gap-3 px-3 py-2 text-sm font-medium rounded-md hover:bg-secondary text-foreground transition-colors">
               <LayoutDashboard className="w-4 h-4 text-muted-foreground" />
