@@ -1,10 +1,30 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from database import engine, Base
+import sys
+import traceback
+from urllib.parse import urlparse
+from database import engine, Base, DATABASE_URL
 from routers import sets, sales, metrics, scraper
 
+# Print masked database connection info to Render logs
+try:
+    if DATABASE_URL:
+        parsed = urlparse(DATABASE_URL)
+        print(f"INFO: Attempting database connection: scheme={parsed.scheme}, host={parsed.hostname}, port={parsed.port}, database={parsed.path.lstrip('/')}")
+    else:
+        print("WARNING: DATABASE_URL is not set!")
+except Exception as e:
+    print(f"ERROR: Failed to parse DATABASE_URL for logging: {e}", file=sys.stderr)
+
 # Create database tables
-Base.metadata.create_all(bind=engine)
+try:
+    print("INFO: Synchronizing database schema...")
+    Base.metadata.create_all(bind=engine)
+    print("INFO: Database schema sync complete.")
+except Exception as e:
+    print("CRITICAL: Failed to connect to database or create tables!", file=sys.stderr)
+    traceback.print_exc()
+    sys.exit(1)
 
 app = FastAPI(
     title="LEGO Stock Manager PRO API",
