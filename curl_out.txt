@@ -1,0 +1,1 @@
+{"total_investment":0.0,"current_value":0.0,"total_roi":100.0,"realized_profit":50.0,"realized_profit_1m":50.0,"realized_profit_6m":50.0,"unrealized_profit":0.0,"potential_roi":0.0,"sets_in_stock":0,"sets_sold":1}

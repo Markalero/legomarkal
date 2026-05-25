@@ -1,39 +1,45 @@
 export const dynamic = 'force-dynamic';
-import { getDashboardMetrics, getSets } from "@/lib/api";
+import { getDashboardMetrics, getPortfolioHistory, getTopPerformers } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { TrendingUp, Package, DollarSign, Activity, Target } from "lucide-react";
+import { TrendingUp, Package, DollarSign, Activity } from "lucide-react";
+import { PortfolioHistoryChart } from "@/components/dashboard-charts";
+import { TopPerformersCarousel } from "@/components/top-performers";
 
-type LegoSet = {
-  id: number;
-  product_id: string;
-  name: string;
-  theme: string;
-  buy_price: number;
-  current_price: number;
-  target_price: number | null;
-  status: string;
-};
+
 
 export default async function DashboardPage() {
   let metrics = null;
-  let sets = [];
+  let historyData = [];
+  let topPerformers = [];
+
   try {
-    metrics = await getDashboardMetrics();
-    sets = await getSets();
+    const [mRes, hRes, tpRes] = await Promise.all([
+      getDashboardMetrics(),
+      getPortfolioHistory(),
+      getTopPerformers()
+    ]);
+    metrics = mRes;
+    historyData = hRes;
+    topPerformers = tpRes;
   } catch (e) {
-    console.error("Could not fetch data. Is backend running?", e);
+    console.error("Could not fetch dashboard data:", e);
   }
 
   const m = metrics || {
     total_investment: 0,
     current_value: 0,
     total_roi: 0,
+    realized_profit: 0,
+    realized_profit_1m: 0,
+    realized_profit_6m: 0,
+    unrealized_profit: 0,
+    potential_roi: 0,
     sets_in_stock: 0,
     sets_sold: 0
   };
 
-  // Find sets that have reached their target price
-  const opportunitySets = sets.filter((s: LegoSet) => s.status === "IN_STOCK" && s.target_price && s.current_price && s.current_price >= s.target_price);
+  // Sets near or at their target price (only IN_STOCK)
+  // const opportunitySets = sets.filter((s: LegoSet) => s.status === "IN_STOCK" && s.target_price && s.current_price && s.current_price >= s.target_price);
 
   return (
     <div className="relative min-h-[calc(100vh-4rem)] p-4 sm:p-8 -m-8 overflow-hidden animate-in fade-in slide-in-from-bottom-4 duration-700">
@@ -53,7 +59,9 @@ export default async function DashboardPage() {
           </p>
         </div>
 
-        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
+
+
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
           <Card className="bg-background/60 backdrop-blur-xl border-white/10 shadow-xl hover:bg-background/80 transition-colors">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">Inversión Total</CardTitle>
@@ -62,25 +70,37 @@ export default async function DashboardPage() {
               </div>
             </CardHeader>
             <CardContent>
-              <div className="text-3xl font-bold">€{m.total_investment.toLocaleString()}</div>
+              <div className="text-3xl font-bold">€{m.total_investment.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
               <p className="text-xs text-muted-foreground mt-1">
                 Capital base invertido
               </p>
             </CardContent>
           </Card>
           
-          <Card className="bg-background/60 backdrop-blur-xl border-white/10 shadow-xl hover:bg-background/80 transition-colors">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Valor Estimado</CardTitle>
-              <div className="p-2 bg-success/10 rounded-full">
-                <Activity className="h-4 w-4 text-success" />
+          <Card className="bg-background/60 backdrop-blur-xl border-white/10 shadow-xl hover:bg-background/80 transition-colors flex flex-col justify-between">
+            <div>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Valor Estimado</CardTitle>
+                <div className="p-2 bg-success/10 rounded-full">
+                  <Activity className="h-4 w-4 text-success" />
+                </div>
+              </CardHeader>
+              <CardContent>
+                <div className="flex items-baseline gap-2">
+                  <div className="text-3xl font-bold text-success">€{m.current_value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+                </div>
+                <p className={`text-xs mt-1 font-semibold ${m.unrealized_profit >= 0 ? 'text-success' : 'text-destructive'}`}>
+                  {m.unrealized_profit >= 0 ? '+' : ''}€{m.unrealized_profit.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} (Stock)
+                </p>
+              </CardContent>
+            </div>
+            <CardContent className="pt-0">
+              <div className="flex justify-between items-center bg-background/50 border px-3 py-1.5 rounded text-xs mt-2">
+                <span className="text-[10px] text-muted-foreground uppercase tracking-wider font-semibold">ROI Potencial (Stock)</span>
+                <span className={`font-semibold text-sm ${m.potential_roi >= 0 ? 'text-success' : 'text-destructive'}`}>
+                  {m.potential_roi >= 0 ? '+' : ''}{m.potential_roi.toLocaleString(undefined, { maximumFractionDigits: 1 })}%
+                </span>
               </div>
-            </CardHeader>
-            <CardContent>
-              <div className="text-3xl font-bold text-success">€{m.current_value.toLocaleString()}</div>
-              <p className="text-xs text-muted-foreground mt-1">
-                Según mercado actual
-              </p>
             </CardContent>
           </Card>
 
@@ -92,24 +112,44 @@ export default async function DashboardPage() {
               </div>
             </CardHeader>
             <CardContent>
-              <div className={`text-3xl font-bold ${m.total_roi >= 0 ? "text-success" : "text-destructive"}`}>
-                {m.total_roi > 0 ? "+" : ""}{m.total_roi}%
+              <div className="flex items-baseline gap-2">
+                <div className={`text-3xl font-bold ${m.total_roi >= 0 ? "text-success" : "text-destructive"}`}>
+                  {m.total_roi > 0 ? "+" : ""}{m.total_roi.toLocaleString(undefined, { maximumFractionDigits: 1 })}%
+                </div>
               </div>
-              <p className="text-xs text-muted-foreground mt-1">
-                Beneficio de ventas cerradas
-              </p>
+              
+              <div className="mt-4 grid grid-cols-2 gap-2 w-full">
+                <div className="flex flex-col bg-background/50 border px-2 py-1.5 rounded text-xs">
+                  <span className="text-[10px] text-muted-foreground uppercase tracking-wider">Este mes</span>
+                  <span className={`font-semibold ${m.realized_profit_1m >= 0 ? 'text-success' : 'text-destructive'}`}>
+                    {m.realized_profit_1m >= 0 ? '+' : ''}€{m.realized_profit_1m.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  </span>
+                </div>
+                <div className="flex flex-col bg-background/50 border px-2 py-1.5 rounded text-xs">
+                  <span className="text-[10px] text-muted-foreground uppercase tracking-wider">Últ. 6 meses</span>
+                  <span className={`font-semibold ${m.realized_profit_6m >= 0 ? 'text-success' : 'text-destructive'}`}>
+                    {m.realized_profit_6m >= 0 ? '+' : ''}€{m.realized_profit_6m.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  </span>
+                </div>
+                <div className="col-span-2 flex justify-between items-center bg-background/50 border px-3 py-1.5 rounded text-xs mt-1">
+                  <span className="text-[10px] text-muted-foreground uppercase tracking-wider">Histórico Total</span>
+                  <span className={`font-semibold text-sm ${m.realized_profit >= 0 ? 'text-success' : 'text-destructive'}`}>
+                    {m.realized_profit >= 0 ? '+' : ''}€{m.realized_profit.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  </span>
+                </div>
+              </div>
             </CardContent>
           </Card>
 
           <Card className="bg-background/60 backdrop-blur-xl border-white/10 shadow-xl hover:bg-background/80 transition-colors">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Stock</CardTitle>
+              <CardTitle className="text-sm font-medium">Inventario</CardTitle>
               <div className="p-2 bg-secondary/50 rounded-full">
                 <Package className="h-4 w-4 text-foreground" />
               </div>
             </CardHeader>
             <CardContent>
-              <div className="text-3xl font-bold">{m.sets_in_stock}</div>
+              <div className="text-3xl font-bold">{m.sets_in_stock} sets</div>
               <p className="text-xs text-muted-foreground mt-1">
                 {m.sets_sold} sets vendidos históricamente
               </p>
@@ -118,51 +158,20 @@ export default async function DashboardPage() {
         </div>
 
         <div className="grid gap-6 grid-cols-1 lg:grid-cols-7">
-          <Card className="lg:col-span-4 bg-background/60 backdrop-blur-xl border-white/10 shadow-xl">
-            <CardHeader>
-              <CardTitle>Evolución del Valor (Histórico)</CardTitle>
-            </CardHeader>
-            <CardContent className="h-[300px] flex items-center justify-center border-t border-white/5 m-6 rounded-md bg-black/5">
-              <p className="text-sm text-muted-foreground text-center max-w-sm">
-                El gráfico de series temporales de la tabla <code>price_history</code> aparecerá aquí tras recopilar suficientes datos nocturnos.
-              </p>
-            </CardContent>
-          </Card>
+          {/* Gráfico Recharts */}
+          <PortfolioHistoryChart data={historyData} />
           
-          <Card className="lg:col-span-3 bg-background/60 backdrop-blur-xl border-white/10 shadow-xl overflow-hidden relative">
-            <div className="absolute top-0 right-0 w-32 h-32 bg-success/10 rounded-bl-full -z-10" />
+          {/* Widget Top Performers */}
+          <Card className="lg:col-span-3 bg-background/60 backdrop-blur-xl border-white/10 shadow-xl overflow-hidden relative flex flex-col">
+            <div className="absolute top-0 right-0 w-32 h-32 bg-primary/10 rounded-bl-full -z-10" />
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
-                <Target className="w-5 h-5 text-success" />
-                Oportunidades de Venta
+                <TrendingUp className="w-5 h-5 text-primary" />
+                Top Performers
               </CardTitle>
             </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
-                {opportunitySets.length === 0 ? (
-                  <div className="flex flex-col items-center justify-center py-8 text-center">
-                    <div className="p-3 bg-muted rounded-full mb-3">
-                      <Target className="w-6 h-6 text-muted-foreground" />
-                    </div>
-                    <p className="text-sm text-muted-foreground">Ningún set ha alcanzado su precio objetivo todavía.</p>
-                  </div>
-                ) : (
-                  <div className="space-y-3">
-                    {opportunitySets.map((s: LegoSet) => (
-                      <div key={s.id} className="flex items-center justify-between p-3 rounded-lg bg-success/10 border border-success/20">
-                        <div>
-                          <p className="font-medium text-sm text-foreground">{s.name}</p>
-                          <p className="text-xs text-muted-foreground">#{s.product_id}</p>
-                        </div>
-                        <div className="text-right">
-                          <p className="font-bold text-success">€{s.current_price.toFixed(2)}</p>
-                          <p className="text-[10px] uppercase tracking-wider font-semibold text-success/70">Target: €{s.target_price!.toFixed(2)}</p>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
+            <CardContent className="flex-1 overflow-hidden p-0 px-4 pb-4">
+              <TopPerformersCarousel performers={topPerformers} />
             </CardContent>
           </Card>
         </div>

@@ -12,6 +12,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { PackagePlus, Loader2, Search } from "lucide-react";
 import { useRouter } from "next/navigation";
+import { toast } from "sonner";
 
 export function AddSetDialog() {
   const [open, setOpen] = useState(false);
@@ -27,6 +28,7 @@ export function AddSetDialog() {
     year_eol: "",
     buy_price: "",
     msrp: "",
+    current_price: "",
     quantity: "1",
     condition: "MISB",
     notes: "",
@@ -61,13 +63,15 @@ export function AddSetDialog() {
           image_url: data.image_url || prev.image_url,
           year_eol: data.year_eol || prev.year_eol,
           msrp: data.retail_price || prev.msrp,
+          current_price: data.current_price || prev.current_price,
         }));
+        toast.success("Datos obtenidos de BrickEconomy");
       } else {
-        alert("No se encontró el set automáticamente o el servicio está ocupado. Puedes introducir los datos manualmente.");
+        toast.warning("No se encontró el set o el servicio está ocupado. Puedes introducir los datos manualmente.");
       }
     } catch (err) {
       console.error(err);
-      alert("Error de conexión con el servidor. Verifica que el backend esté en marcha.");
+      toast.error("Error de conexión con el servidor. Verifica que el backend esté en marcha.");
     } finally {
       setSearching(false);
       setHasSearched(true);
@@ -84,6 +88,7 @@ export function AddSetDialog() {
         year_eol: formData.year_eol,
         buy_price: parseFloat(formData.buy_price),
         msrp: formData.msrp ? parseFloat(formData.msrp) : null,
+        current_price: formData.current_price ? parseFloat(formData.current_price) : null,
         quantity: parseInt(formData.quantity, 10)
       };
 
@@ -101,11 +106,12 @@ export function AddSetDialog() {
       }
 
       setOpen(false);
-      setFormData({ product_id: "", name: "", theme: "", year_eol: "", buy_price: "", msrp: "", quantity: "1", condition: "MISB", notes: "", image_url: "" });
+      setFormData({ product_id: "", name: "", theme: "", year_eol: "", buy_price: "", msrp: "", current_price: "", quantity: "1", condition: "MISB", notes: "", image_url: "" });
+      toast.success("Set añadido exitosamente al inventario.");
       router.refresh();
     } catch (err) {
       console.error(err);
-      alert("Error al añadir el set.");
+      toast.error("Error al añadir el set.");
     } finally {
       setLoading(false);
     }
@@ -127,7 +133,7 @@ export function AddSetDialog() {
             <div className="flex gap-2 items-end">
               <div className="space-y-2 flex-1">
                 <label htmlFor="product_id" className="text-sm font-medium">ID del Set *</label>
-                <Input id="product_id" name="product_id" required value={formData.product_id} onChange={handleChange} onKeyDown={handleKeyDown} placeholder="ej. 75192" />
+                <Input id="product_id" name="product_id" required value={formData.product_id} onChange={handleChange} onKeyDown={handleKeyDown} placeholder="ej. 75192" className="bg-background" />
               </div>
               <Button data-testid="autocomplete-btn" type="button" variant="secondary" onClick={handleAutocomplete} disabled={searching} className="mb-[2px]">
                 {searching ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
@@ -135,18 +141,24 @@ export function AddSetDialog() {
             </div>
 
             {searching && (
-              <div className="mt-3 space-y-1.5 transition-all animate-in fade-in slide-in-from-top-1">
-                <div className="flex justify-between text-xs text-amber-500 font-medium">
-                  <span className="flex items-center gap-1"><Loader2 className="w-3 h-3 animate-spin" /> Extrayendo datos de BrickEconomy...</span>
+              <div className="mt-6 space-y-4 animate-pulse">
+                <div className="flex gap-4 items-start">
+                  <div className="w-24 h-24 rounded-lg bg-slate-300 dark:bg-slate-700 shrink-0" />
+                  <div className="flex-1 space-y-4 mt-2">
+                    <div className="h-4 bg-slate-300 dark:bg-slate-700 rounded w-1/3" />
+                    <div className="h-10 bg-slate-300 dark:bg-slate-700 rounded w-full" />
+                  </div>
                 </div>
-                <div className="w-full bg-secondary h-1.5 rounded-full overflow-hidden">
-                  <div className="bg-amber-500 h-full w-full animate-pulse"></div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="h-10 bg-slate-300 dark:bg-slate-700 rounded w-full" />
+                  <div className="h-10 bg-slate-300 dark:bg-slate-700 rounded w-full" />
+                  <div className="col-span-2 h-10 bg-slate-300 dark:bg-slate-700 rounded w-full" />
                 </div>
               </div>
             )}
           </div>
 
-          {(formData.name || hasSearched) && (
+          {(formData.name || hasSearched) && !searching && (
             <div className="space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-300">
               <div className="flex gap-4 items-start">
                 {formData.image_url && (
@@ -158,7 +170,7 @@ export function AddSetDialog() {
                 <div className="flex-1 space-y-4">
                   <div className="space-y-2">
                     <label htmlFor="name" className="text-sm font-medium">Nombre Oficial *</label>
-                    <Input id="name" name="name" required value={formData.name} onChange={handleChange} placeholder="Ej. Millennium Falcon" />
+                    <Input id="name" name="name" required value={formData.name} onChange={handleChange} placeholder="Ej. Millennium Falcon" className="bg-muted/50 text-muted-foreground focus-visible:ring-transparent" />
                   </div>
                 </div>
               </div>
@@ -166,11 +178,11 @@ export function AddSetDialog() {
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2 transition-all animate-in fade-in slide-in-from-left-2">
                   <label htmlFor="theme" className="text-sm font-medium">Tema</label>
-                  <Input id="theme" name="theme" value={formData.theme} onChange={handleChange} placeholder="Ej. Star Wars" />
+                  <Input id="theme" name="theme" value={formData.theme} onChange={handleChange} placeholder="Ej. Star Wars" className="bg-muted/50 text-muted-foreground focus-visible:ring-transparent" />
                 </div>
                 <div className="space-y-2 transition-all animate-in fade-in slide-in-from-right-2">
                   <label htmlFor="year_eol" className="text-sm font-medium">Año / EOL</label>
-                  <Input id="year_eol" name="year_eol" value={formData.year_eol} onChange={handleChange} placeholder="Ej. 2024" />
+                  <Input id="year_eol" name="year_eol" value={formData.year_eol} onChange={handleChange} placeholder="Ej. 2024" className="bg-muted/50 text-muted-foreground focus-visible:ring-transparent" />
                 </div>
                 <div className="space-y-2 col-span-2">
                   <label htmlFor="condition" className="text-sm font-medium">Condición *</label>
@@ -182,18 +194,22 @@ export function AddSetDialog() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-3 gap-4">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 <div className="space-y-2">
                   <label htmlFor="msrp" className="text-sm font-medium">PVP (€)</label>
-                  <Input id="msrp" name="msrp" type="number" step="0.01" value={formData.msrp} onChange={handleChange} placeholder="0.00" />
+                  <Input id="msrp" name="msrp" type="number" step="0.01" value={formData.msrp} onChange={handleChange} placeholder="0.00" className="bg-muted/50 text-muted-foreground focus-visible:ring-transparent" />
+                </div>
+                <div className="space-y-2">
+                  <label htmlFor="current_price" className="text-sm font-medium text-success">V. Mercado</label>
+                  <Input id="current_price" name="current_price" type="number" step="0.01" value={formData.current_price} onChange={handleChange} placeholder="0.00" className="bg-muted/50 text-muted-foreground focus-visible:ring-transparent" />
                 </div>
                 <div className="space-y-2">
                   <label htmlFor="buy_price" className="text-sm font-medium">Compra (€) *</label>
-                  <Input id="buy_price" name="buy_price" type="number" step="0.01" required value={formData.buy_price} onChange={handleChange} placeholder="0.00" />
+                  <Input id="buy_price" name="buy_price" type="number" step="0.01" required value={formData.buy_price} onChange={handleChange} placeholder="0.00" className="bg-background font-medium" />
                 </div>
                 <div className="space-y-2">
                   <label htmlFor="quantity" className="text-sm font-medium">Cant.</label>
-                  <Input id="quantity" name="quantity" type="number" min="1" required value={formData.quantity} onChange={handleChange} />
+                  <Input id="quantity" name="quantity" type="number" min="1" required value={formData.quantity} onChange={handleChange} className="bg-background font-medium" />
                 </div>
               </div>
 

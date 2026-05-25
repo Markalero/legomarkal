@@ -16,6 +16,7 @@ class AutocompleteResponse(BaseModel):
     image_url: Optional[str] = None
     year_eol: Optional[str] = None
     retail_price: Optional[str] = None
+    current_price: Optional[str] = None
 
 @router.get("/{product_id}", response_model=AutocompleteResponse)
 async def get_set_info(product_id: str):
@@ -104,6 +105,14 @@ async def get_set_info(product_id: str):
                     if cleaned_price:
                         retail_price_val = cleaned_price
 
+                # Extract Value (Market Price)
+                value_raw = data_dict.get("Value", "")
+                current_price_val = ""
+                if value_raw:
+                    cleaned_value = re.sub(r'[^\d.]', '', value_raw)
+                    if cleaned_value:
+                        current_price_val = cleaned_value
+
             except Exception as metadata_err:
                 print("Could not parse metadata:", metadata_err)
 
@@ -113,7 +122,8 @@ async def get_set_info(product_id: str):
                 theme=theme_val,
                 image_url=image_url,
                 year_eol=year_eol_val,
-                retail_price=retail_price_val
+                retail_price=retail_price_val,
+                current_price=current_price_val
             )
             
         except HTTPException as he:

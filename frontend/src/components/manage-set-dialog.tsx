@@ -20,6 +20,7 @@ export function ManageSetDialog({ set }: { set: { id: number, name: string, prod
   const router = useRouter();
   
   const [sellPrice, setSellPrice] = useState("");
+  const [sellDate, setSellDate] = useState(new Date().toISOString().split("T")[0]);
   const [platform, setPlatform] = useState("");
   const [receiptFile, setReceiptFile] = useState<File | null>(null);
 
@@ -34,6 +35,9 @@ export function ManageSetDialog({ set }: { set: { id: number, name: string, prod
         formData.append("platform", platform);
       } else {
         formData.append("platform", "Varios");
+      }
+      if (sellDate) {
+        formData.append("sell_date", sellDate);
       }
       if (receiptFile) {
         formData.append("receipt", receiptFile);
@@ -83,6 +87,10 @@ export function ManageSetDialog({ set }: { set: { id: number, name: string, prod
               <label htmlFor="platform" className="text-sm font-medium">Plataforma</label>
               <Input id="platform" value={platform} onChange={e => setPlatform(e.target.value)} placeholder="ej. Wallapop" />
             </div>
+          </div>
+          <div className="space-y-2">
+            <label htmlFor="sell_date" className="text-sm font-medium">Fecha de Venta</label>
+            <Input id="sell_date" type="date" value={sellDate} onChange={e => setSellDate(e.target.value)} />
           </div>
           <div className="space-y-2">
             <label htmlFor="receipt" className="text-sm font-medium">Recibo / Justificante (Opcional)</label>

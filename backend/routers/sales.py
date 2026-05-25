@@ -13,6 +13,7 @@ router = APIRouter(
 def register_sale(
     set_id: int,
     sell_price: float = Form(...),
+    sell_date: Optional[str] = Form(None),
     platform: Optional[str] = Form(None),
     receipt: Optional[UploadFile] = File(None),
     db: Session = Depends(database.get_db)
@@ -33,9 +34,13 @@ def register_sale(
             raise HTTPException(status_code=500, detail="Failed to upload receipt")
 
     # Create sale
+    from dateutil.parser import parse
+    parsed_date = parse(sell_date) if sell_date else None
+
     db_sale = models.Sale(
         lego_set_id=set_id,
         sell_price=sell_price,
+        sell_date=parsed_date,
         platform=platform,
         receipt_url=receipt_url
     )

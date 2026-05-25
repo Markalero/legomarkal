@@ -84,5 +84,24 @@ class DashboardMetrics(BaseModel):
     total_investment: float
     current_value: float
     total_roi: float
+    realized_profit: float
+    realized_profit_1m: float
+    realized_profit_6m: float
+    unrealized_profit: float
+    potential_roi: float
     sets_in_stock: int
     sets_sold: int
+
+class ChartDataPoint(BaseModel):
+    date: str
+    value: float
+    investment: float = 0.0
+
+class TopPerformer(BaseModel):
+    id: int
+    product_id: str
+    name: str
+    image_url: Optional[str] = None
+    buy_price: float
+    current_price: float
+    roi_percentage: float

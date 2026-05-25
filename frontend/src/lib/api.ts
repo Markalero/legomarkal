@@ -23,3 +23,15 @@ export async function getSales() {
   if (!res.ok) throw new Error('Failed to fetch sales');
   return res.json();
 }
+
+export async function getPortfolioHistory() {
+  const res = await fetch(`${API_URL}/metrics/history`, { cache: 'no-store' });
+  if (!res.ok) throw new Error('Failed to fetch portfolio history');
+  return res.json();
+}
+
+export async function getTopPerformers() {
+  const res = await fetch(`${API_URL}/metrics/top-performers`, { cache: 'no-store' });
+  if (!res.ok) throw new Error('Failed to fetch top performers');
+  return res.json();
+}

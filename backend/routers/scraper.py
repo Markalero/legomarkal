@@ -66,3 +66,20 @@ def receive_scraped_prices(payload: WebhookPayload, db: Session = Depends(databa
             
     db.commit()
     return {"message": f"Successfully updated {updated_count} sets"}
+
+import subprocess
+
+@router.post("/trigger")
+def trigger_scraper(api_key_header: str = Security(api_key_header)):
+    # Trigger doesn't strictly need the API key for internal users but it's good practice.
+    # Actually, let's allow it without api key for simplicity in the frontend,
+    # or just use a simple token if needed. Since it's a local tool, we can just allow it.
+    
+    scraper_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "scraper", "main.py")
+    
+    # Run the scraper in the background. It will hit the /webhook endpoint when done.
+    try:
+        subprocess.Popen(["python", scraper_path])
+        return {"message": "Scraper disparado en segundo plano."}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
