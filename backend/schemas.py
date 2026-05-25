@@ -24,6 +24,10 @@ class SaleBase(BaseModel):
 class SaleCreate(SaleBase):
     pass
 
+class SaleUpdate(BaseModel):
+    sell_price: Optional[float] = None
+    platform: Optional[str] = None
+
 class Sale(SaleBase):
     id: int
     lego_set_id: int
@@ -42,6 +46,7 @@ class LegoSetBase(BaseModel):
     msrp: Optional[float] = None
     current_price: Optional[float] = None
     target_price: Optional[float] = None
+    year_eol: Optional[str] = None
     quantity: int = 1
     status: SetStatus = SetStatus.IN_STOCK
     condition: SetCondition = SetCondition.MISB
@@ -58,6 +63,7 @@ class LegoSetUpdate(BaseModel):
     msrp: Optional[float] = None
     current_price: Optional[float] = None
     target_price: Optional[float] = None
+    year_eol: Optional[str] = None
     quantity: Optional[int] = None
     status: Optional[SetStatus] = None
     condition: Optional[SetCondition] = None

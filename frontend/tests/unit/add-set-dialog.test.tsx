@@ -39,7 +39,9 @@ describe('AddSetDialog Component', () => {
       json: async () => ({
         name: 'Star Wars Millennium Falcon',
         theme: 'Star Wars',
-        image_url: 'http://example.com/falcon.jpg'
+        image_url: 'http://example.com/falcon.jpg',
+        year_eol: '2017',
+        retail_price: '799.99'
       })
     });
     global.alert = vi.fn();
@@ -63,5 +65,18 @@ describe('AddSetDialog Component', () => {
     expect(themeInput).toBeInTheDocument();
     expect(themeInput).toHaveValue('Star Wars');
     expect(themeInput).toHaveAttribute('readonly');
+
+    const yearInput = await screen.findByLabelText(/Año \/ EOL \(Extraído\)/i);
+    expect(yearInput).toBeInTheDocument();
+    expect(yearInput).toHaveValue('2017');
+    expect(yearInput).toHaveAttribute('readonly');
+
+    const msrpInput = await screen.findByLabelText(/PVP/i);
+    expect(msrpInput).toBeInTheDocument();
+    expect(msrpInput).toHaveValue(799.99);
+
+    const img = screen.getByAltText('Star Wars Millennium Falcon');
+    expect(img).toBeInTheDocument();
+    expect(img).toHaveAttribute('src', 'http://example.com/falcon.jpg');
   });
 });

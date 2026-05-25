@@ -17,6 +17,7 @@ export function AddSetDialog() {
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [searching, setSearching] = useState(false);
+  const [hasSearched, setHasSearched] = useState(false);
   const router = useRouter();
 
   const [formData, setFormData] = useState({
@@ -26,7 +27,6 @@ export function AddSetDialog() {
     year_eol: "",
     buy_price: "",
     msrp: "",
-    target_price: "",
     quantity: "1",
     condition: "MISB",
     notes: "",
@@ -37,9 +37,17 @@ export function AddSetDialog() {
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
 
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      handleAutocomplete();
+    }
+  };
+
   const handleAutocomplete = async () => {
     if (!formData.product_id) return;
     setSearching(true);
+    setHasSearched(false);
     try {
       const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000/api";
       const res = await fetch(`${API_URL}/autocomplete/${formData.product_id}`);
@@ -55,12 +63,14 @@ export function AddSetDialog() {
           msrp: data.retail_price || prev.msrp,
         }));
       } else {
-        alert("No se encontró el set en BrickEconomy o el servicio está ocupado. Intenta de nuevo en unos segundos.");
+        alert("No se encontró el set automáticamente o el servicio está ocupado. Puedes introducir los datos manualmente.");
       }
     } catch (err) {
       console.error(err);
+      alert("Error de conexión con el servidor. Verifica que el backend esté en marcha.");
     } finally {
       setSearching(false);
+      setHasSearched(true);
     }
   };
 
@@ -71,9 +81,9 @@ export function AddSetDialog() {
     try {
       const payload = {
         ...formData,
+        year_eol: formData.year_eol,
         buy_price: parseFloat(formData.buy_price),
         msrp: formData.msrp ? parseFloat(formData.msrp) : null,
-        target_price: formData.target_price ? parseFloat(formData.target_price) : null,
         quantity: parseInt(formData.quantity, 10)
       };
 
@@ -91,7 +101,7 @@ export function AddSetDialog() {
       }
 
       setOpen(false);
-      setFormData({ product_id: "", name: "", theme: "", year_eol: "", buy_price: "", msrp: "", target_price: "", quantity: "1", condition: "MISB", notes: "", image_url: "" });
+      setFormData({ product_id: "", name: "", theme: "", year_eol: "", buy_price: "", msrp: "", quantity: "1", condition: "MISB", notes: "", image_url: "" });
       router.refresh();
     } catch (err) {
       console.error(err);
@@ -111,13 +121,13 @@ export function AddSetDialog() {
         <DialogHeader>
           <DialogTitle>Añadir Nuevo Set</DialogTitle>
         </DialogHeader>
-        <form onSubmit={handleSubmit} className="space-y-4 py-4 max-h-[70vh] overflow-y-auto px-1">
+        <form onSubmit={handleSubmit} className="space-y-4 py-4 max-h-[70vh] overflow-y-auto overflow-x-hidden pr-2">
 
           <div className="flex flex-col">
             <div className="flex gap-2 items-end">
               <div className="space-y-2 flex-1">
                 <label htmlFor="product_id" className="text-sm font-medium">ID del Set *</label>
-                <Input id="product_id" name="product_id" required value={formData.product_id} onChange={handleChange} placeholder="ej. 75192" />
+                <Input id="product_id" name="product_id" required value={formData.product_id} onChange={handleChange} onKeyDown={handleKeyDown} placeholder="ej. 75192" />
               </div>
               <Button data-testid="autocomplete-btn" type="button" variant="secondary" onClick={handleAutocomplete} disabled={searching} className="mb-[2px]">
                 {searching ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
@@ -136,76 +146,70 @@ export function AddSetDialog() {
             )}
           </div>
 
-          {formData.name && (
-            <div className="flex gap-4 items-start transition-all animate-in fade-in slide-in-from-top-2">
-              {formData.image_url && (
-                <div className="w-24 h-24 rounded-lg overflow-hidden border border-border bg-white/5 flex items-center justify-center shrink-0">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={formData.image_url} alt={formData.name} className="max-w-full max-h-full object-contain" />
-                </div>
-              )}
-              <div className="flex-1 space-y-4">
-                <div className="space-y-2">
-                  <label htmlFor="name" className="text-sm font-medium text-muted-foreground">Nombre Oficial (Extraído)</label>
-                  <Input id="name" name="name" required value={formData.name} readOnly className="bg-muted/50 cursor-not-allowed border-dashed focus-visible:ring-0" />
+          {(formData.name || hasSearched) && (
+            <div className="space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-300">
+              <div className="flex gap-4 items-start">
+                {formData.image_url && (
+                  <div className="w-24 h-24 rounded-lg overflow-hidden border border-border bg-white/5 flex items-center justify-center shrink-0">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={formData.image_url} alt={formData.name || "Set image"} className="max-w-full max-h-full object-contain" />
+                  </div>
+                )}
+                <div className="flex-1 space-y-4">
+                  <div className="space-y-2">
+                    <label htmlFor="name" className="text-sm font-medium">Nombre Oficial *</label>
+                    <Input id="name" name="name" required value={formData.name} onChange={handleChange} placeholder="Ej. Millennium Falcon" />
+                  </div>
                 </div>
               </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2 transition-all animate-in fade-in slide-in-from-left-2">
+                  <label htmlFor="theme" className="text-sm font-medium">Tema</label>
+                  <Input id="theme" name="theme" value={formData.theme} onChange={handleChange} placeholder="Ej. Star Wars" />
+                </div>
+                <div className="space-y-2 transition-all animate-in fade-in slide-in-from-right-2">
+                  <label htmlFor="year_eol" className="text-sm font-medium">Año / EOL</label>
+                  <Input id="year_eol" name="year_eol" value={formData.year_eol} onChange={handleChange} placeholder="Ej. 2024" />
+                </div>
+                <div className="space-y-2 col-span-2">
+                  <label htmlFor="condition" className="text-sm font-medium">Condición *</label>
+                  <select id="condition" name="condition" value={formData.condition} onChange={handleChange} className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50">
+                    <option value="MISB">MISB (Nuevo y Sellado)</option>
+                    <option value="CIB">CIB (Abierto, Completo)</option>
+                    <option value="USED">Usado / Suelto</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-3 gap-4">
+                <div className="space-y-2">
+                  <label htmlFor="msrp" className="text-sm font-medium">PVP (€)</label>
+                  <Input id="msrp" name="msrp" type="number" step="0.01" value={formData.msrp} onChange={handleChange} placeholder="0.00" />
+                </div>
+                <div className="space-y-2">
+                  <label htmlFor="buy_price" className="text-sm font-medium">Compra (€) *</label>
+                  <Input id="buy_price" name="buy_price" type="number" step="0.01" required value={formData.buy_price} onChange={handleChange} placeholder="0.00" />
+                </div>
+                <div className="space-y-2">
+                  <label htmlFor="quantity" className="text-sm font-medium">Cant.</label>
+                  <Input id="quantity" name="quantity" type="number" min="1" required value={formData.quantity} onChange={handleChange} />
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <label htmlFor="notes" className="text-sm font-medium">Notas de Condición / Desperfectos</label>
+                <textarea id="notes" name="notes" value={formData.notes} onChange={handleChange} placeholder="ej. La esquina de la caja está abollada..." className="flex min-h-[60px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50" />
+              </div>
+
+              <DialogFooter className="pt-4">
+                <Button type="submit" disabled={loading} className="w-full">
+                  {loading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
+                  {loading ? "Guardando..." : "Guardar Set en Inventario"}
+                </Button>
+              </DialogFooter>
             </div>
           )}
-
-          <div className="grid grid-cols-2 gap-4">
-            {formData.theme && (
-              <div className="space-y-2 transition-all animate-in fade-in slide-in-from-left-2">
-                <label htmlFor="theme" className="text-sm font-medium text-muted-foreground">Tema (Extraído)</label>
-                <Input id="theme" name="theme" value={formData.theme} readOnly className="bg-muted/50 cursor-not-allowed border-dashed focus-visible:ring-0" />
-              </div>
-            )}
-            {formData.year_eol && (
-              <div className="space-y-2 transition-all animate-in fade-in slide-in-from-right-2">
-                <label htmlFor="year_eol" className="text-sm font-medium text-muted-foreground">Año / EOL (Extraído)</label>
-                <Input id="year_eol" name="year_eol" value={formData.year_eol} readOnly className="bg-muted/50 cursor-not-allowed border-dashed focus-visible:ring-0 text-xs" />
-              </div>
-            )}
-            <div className={`space-y-2 col-span-2`}>
-              <label htmlFor="condition" className="text-sm font-medium">Condición *</label>
-              <select id="condition" name="condition" value={formData.condition} onChange={handleChange} className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50">
-                <option value="MISB">MISB (Nuevo y Sellado)</option>
-                <option value="CIB">CIB (Abierto, Completo)</option>
-                <option value="USED">Usado / Suelto</option>
-              </select>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-4 gap-4">
-            <div className="space-y-2">
-              <label htmlFor="msrp" className="text-sm font-medium">PVP (€)</label>
-              <Input id="msrp" name="msrp" type="number" step="0.01" value={formData.msrp} onChange={handleChange} placeholder="0.00" />
-            </div>
-            <div className="space-y-2">
-              <label htmlFor="buy_price" className="text-sm font-medium">Compra (€) *</label>
-              <Input id="buy_price" name="buy_price" type="number" step="0.01" required value={formData.buy_price} onChange={handleChange} placeholder="0.00" />
-            </div>
-            <div className="space-y-2">
-              <label htmlFor="target_price" className="text-sm font-medium">Target (€)</label>
-              <Input id="target_price" name="target_price" type="number" step="0.01" value={formData.target_price} onChange={handleChange} placeholder="0.00" />
-            </div>
-            <div className="space-y-2">
-              <label htmlFor="quantity" className="text-sm font-medium">Cant.</label>
-              <Input id="quantity" name="quantity" type="number" min="1" required value={formData.quantity} onChange={handleChange} />
-            </div>
-          </div>
-
-          <div className="space-y-2">
-            <label htmlFor="notes" className="text-sm font-medium">Notas de Condición / Desperfectos</label>
-            <textarea id="notes" name="notes" value={formData.notes} onChange={handleChange} placeholder="ej. La esquina de la caja está abollada..." className="flex min-h-[60px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50" />
-          </div>
-
-          <DialogFooter className="pt-4">
-            <Button type="submit" disabled={loading} className="w-full">
-              {loading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
-              {loading ? "Guardando..." : "Guardar Set en Inventario"}
-            </Button>
-          </DialogFooter>
         </form>
       </DialogContent>
     </Dialog>

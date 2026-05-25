@@ -11,7 +11,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Loader2 } from "lucide-react";
+import { Loader2, ShoppingCart } from "lucide-react";
 import { useRouter } from "next/navigation";
 
 export function ManageSetDialog({ set }: { set: { id: number, name: string, product_id: string } }) {
@@ -21,25 +21,28 @@ export function ManageSetDialog({ set }: { set: { id: number, name: string, prod
   
   const [sellPrice, setSellPrice] = useState("");
   const [platform, setPlatform] = useState("");
+  const [receiptFile, setReceiptFile] = useState<File | null>(null);
 
   const handleSell = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
 
     try {
-      const payload = {
-        sell_price: parseFloat(sellPrice),
-        platform: platform || "Varios",
-        receipt_url: null // receipt upload can be implemented later
-      };
+      const formData = new FormData();
+      formData.append("sell_price", sellPrice);
+      if (platform) {
+        formData.append("platform", platform);
+      } else {
+        formData.append("platform", "Varios");
+      }
+      if (receiptFile) {
+        formData.append("receipt", receiptFile);
+      }
 
       const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000/api";
-      const res = await fetch(`${API_URL}/sales/${set.id}`, {
+      const res = await fetch(`${API_URL}/sales/set/${set.id}`, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(payload)
+        body: formData
       });
 
       if (!res.ok) {
@@ -58,9 +61,11 @@ export function ManageSetDialog({ set }: { set: { id: number, name: string, prod
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger render={<Button variant="outline" size="sm" />}>
-        Gestionar
-      </DialogTrigger>
+      <DialogTrigger render={
+        <Button variant="ghost" size="icon" className="h-8 w-8 text-success hover:bg-success/10 hover:text-success" title="Vender">
+          <ShoppingCart className="w-4 h-4" />
+        </Button>
+      } />
       <DialogContent className="sm:max-w-[425px]">
         <DialogHeader>
           <DialogTitle>Gestionar Set: {set.name}</DialogTitle>
@@ -78,6 +83,11 @@ export function ManageSetDialog({ set }: { set: { id: number, name: string, prod
               <label htmlFor="platform" className="text-sm font-medium">Plataforma</label>
               <Input id="platform" value={platform} onChange={e => setPlatform(e.target.value)} placeholder="ej. Wallapop" />
             </div>
+          </div>
+          <div className="space-y-2">
+            <label htmlFor="receipt" className="text-sm font-medium">Recibo / Justificante (Opcional)</label>
+            <Input id="receipt" type="file" accept="application/pdf,image/*" onChange={e => setReceiptFile(e.target.files?.[0] || null)} />
+            <p className="text-xs text-muted-foreground">Sube el PDF o imagen de la factura de venta.</p>
           </div>
           <DialogFooter className="pt-4">
             <Button type="submit" disabled={loading} className="w-full">

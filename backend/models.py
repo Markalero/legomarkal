@@ -25,6 +25,7 @@ class LegoSet(Base):
     msrp = Column(Float, nullable=True)
     current_price = Column(Float, nullable=True) # Fetched from Scraper
     target_price = Column(Float, nullable=True) # For market alerts
+    year_eol = Column(String, nullable=True)
     quantity = Column(Integer, default=1)
     status = Column(Enum(SetStatus), default=SetStatus.IN_STOCK)
     condition = Column(Enum(SetCondition), default=SetCondition.MISB)

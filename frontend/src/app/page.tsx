@@ -1,3 +1,4 @@
+export const dynamic = 'force-dynamic';
 import { getDashboardMetrics, getSets } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { TrendingUp, Package, DollarSign, Activity, Target } from "lucide-react";

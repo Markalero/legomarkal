@@ -12,6 +12,12 @@ export async function getSets() {
   return res.json();
 }
 
+export async function getSet(id: string | number) {
+  const res = await fetch(`${API_URL}/sets/${id}`, { cache: 'no-store' });
+  if (!res.ok) throw new Error(`Failed to fetch set ${id}`);
+  return res.json();
+}
+
 export async function getSales() {
   const res = await fetch(`${API_URL}/sales/`, { cache: 'no-store' });
   if (!res.ok) throw new Error('Failed to fetch sales');

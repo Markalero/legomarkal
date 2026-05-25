@@ -52,3 +52,33 @@ def register_sale(
 def read_sales(skip: int = 0, limit: int = 100, db: Session = Depends(database.get_db)):
     sales = db.query(models.Sale).offset(skip).limit(limit).all()
     return sales
+
+@router.put("/{sale_id}", response_model=schemas.Sale)
+def update_sale(sale_id: int, sale_update: schemas.SaleUpdate, db: Session = Depends(database.get_db)):
+    db_sale = db.query(models.Sale).filter(models.Sale.id == sale_id).first()
+    if not db_sale:
+        raise HTTPException(status_code=404, detail="Sale not found")
+    
+    update_data = sale_update.model_dump(exclude_unset=True)
+    for key, value in update_data.items():
+        setattr(db_sale, key, value)
+        
+    db.commit()
+    db.refresh(db_sale)
+    return db_sale
+
+@router.delete("/{sale_id}")
+def delete_sale(sale_id: int, db: Session = Depends(database.get_db)):
+    db_sale = db.query(models.Sale).filter(models.Sale.id == sale_id).first()
+    if not db_sale:
+        raise HTTPException(status_code=404, detail="Sale not found")
+        
+    db_set = db_sale.lego_set
+    # Revert set status back to IN_STOCK if this was the sale that marked it SOLD
+    # (assuming 1 sale per set for now)
+    if db_set:
+        db_set.status = models.SetStatus.IN_STOCK
+        
+    db.delete(db_sale)
+    db.commit()
+    return {"message": "Sale deleted successfully, set reverted to IN_STOCK"}

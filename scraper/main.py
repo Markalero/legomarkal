@@ -20,17 +20,42 @@ async def get_sets_to_scrape():
 async def scrape_lego_price(page, product_id):
     print(f"Scraping price for product {product_id}...")
     try:
-        # Dummy logic for scraping.
-        # In the real world, you'd navigate and extract the price here.
+        set_num = product_id if "-" in product_id else f"{product_id}-1"
+        url = f"https://www.brickeconomy.com/set/{set_num}/"
         
-        # Add a random delay to prevent rate limits
-        await asyncio.sleep(random.uniform(1.0, 3.0))
+        response = await page.goto(url, wait_until="domcontentloaded")
+        if response and response.status == 404:
+            print(f"Set {product_id} not found in BrickEconomy")
+            return None
+            
+        # Add a random delay to prevent rate limits and wait for any anti-bot
+        await asyncio.sleep(random.uniform(2.0, 4.0))
         
-        # Simulate a successful scrape 90% of the time, and a failure 10%
-        if random.random() < 0.1:
-            raise Exception("Simulated DOM change timeout")
-
-        return {"product_id": product_id, "current_price": 99.99}
+        html = await page.content()
+        from bs4 import BeautifulSoup
+        import re
+        soup = BeautifulSoup(html, 'html.parser')
+        
+        retail_price_val = None
+        
+        for div in soup.find_all('div', class_='row'):
+            cols = div.find_all('div')
+            if len(cols) >= 2:
+                lbl = cols[0].get_text(strip=True)
+                val = cols[1].get_text(separator=' ', strip=True)
+                if lbl == "Retail price":
+                    cleaned_price = re.sub(r'[^\d.]', '', val)
+                    if cleaned_price:
+                        retail_price_val = float(cleaned_price)
+                        break
+        
+        if retail_price_val is not None:
+            print(f"Success! {product_id} price: {retail_price_val}")
+            return {"product_id": product_id, "current_price": retail_price_val}
+        else:
+            print(f"Could not find retail price for {product_id}")
+            return None
+            
     except Exception as e:
         print(f"Error scraping {product_id}: {e}")
         return None
