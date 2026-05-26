@@ -1,35 +1,81 @@
-# Python
+# ==========================
+# 1. FICHEROS SENSIBLES
+# ==========================
+.env
+.env.local
+.env.*.local
+*.pem
+*.key
+credentials.json
+secrets.json
+
+# ==========================
+# 2. PYTHON / BACKEND
+# ==========================
 __pycache__/
 *.py[cod]
 *.pyo
-.env
 .venv/
 venv/
+ENV/
 *.egg-info/
+.pytest_cache/
+htmlcov/
+.coverage
+.coverage.*
 
-# Alembic
-alembic/versions/*.pyc
+# Bases de Datos locales (por si acaso)
+*.sqlite
+*.sqlite3
+*.db
+*.db-journal
 
-# Node
+# ==========================
+# 3. NODE / FRONTEND
+# ==========================
 node_modules/
 .next/
-.env.local
-.env*.local
-
-# Build
-dist/
+out/
 build/
+dist/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+.pnp*
+.yarn/*
+!.yarn/patches
+!.yarn/plugins
+!.yarn/releases
+!.yarn/sdks
+!.yarn/versions
 
-# IDE
+# ==========================
+# 4. SCRAPING / PLAYWRIGHT
+# ==========================
+test-results/
+playwright-report/
+blob-report/
+playwright/.cache/
+
+# ==========================
+# 5. SO / ENTORNOS (IDE)
+# ==========================
+.DS_Store
+Thumbs.db
 .idea/
 .vscode/
 *.swp
+*.swo
+.Claude/
+.gemini/
+.vercel/
 
-# OS
-.DS_Store
-Thumbs.db
-
-# Temporary Scripts
+# ==========================
+# 6. TEMPORALES Y LOGS PROPIOS
+# ==========================
+*.log
+curl_out.txt
 brick_dump.html
 test_api.py
 test_dump.py

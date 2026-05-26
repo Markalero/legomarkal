@@ -44,8 +44,6 @@ def upload_receipt(file: UploadFile, base_name: str = None) -> Optional[str]:
         public_url = supabase.storage.from_(BUCKET_NAME).get_public_url(unique_filename)
         return public_url
 
-        return public_url
-
     except Exception as e:
         print(f"Error uploading to Supabase: {e}")
         return None
@@ -66,4 +64,49 @@ def delete_receipt(public_url: str) -> bool:
         return True
     except Exception as e:
         print(f"Error deleting from Supabase: {e}")
+        return False
+
+def download_all_receipts() -> list:
+    """Downloads all files from the receipts bucket as bytes."""
+    try:
+        supabase = get_supabase_client()
+        files = supabase.storage.from_(BUCKET_NAME).list()
+        downloaded = []
+        if files:
+            for f in files:
+                if f["name"] == ".emptyFolder":
+                    continue
+                file_bytes = supabase.storage.from_(BUCKET_NAME).download(f["name"])
+                downloaded.append({"name": f["name"], "content": file_bytes})
+        return downloaded
+    except Exception as e:
+        print(f"Error downloading all receipts: {e}")
+        return []
+
+def upload_receipt_from_bytes(filename: str, content: bytes) -> Optional[str]:
+    """Uploads a receipt from raw bytes (used during restore)"""
+    try:
+        supabase = get_supabase_client()
+        supabase.storage.from_(BUCKET_NAME).upload(
+            file=content,
+            path=filename,
+            file_options={"upsert": "true"}
+        )
+        return supabase.storage.from_(BUCKET_NAME).get_public_url(filename)
+    except Exception as e:
+        print(f"Error uploading bytes to Supabase: {e}")
+        return None
+
+def delete_all_receipts() -> bool:
+    """Deletes all files in the receipts bucket."""
+    try:
+        supabase = get_supabase_client()
+        files = supabase.storage.from_(BUCKET_NAME).list()
+        if files:
+            filenames = [f["name"] for f in files if f["name"] != ".emptyFolder"]
+            if filenames:
+                supabase.storage.from_(BUCKET_NAME).remove(filenames)
+        return True
+    except Exception as e:
+        print(f"Error deleting all receipts: {e}")
         return False

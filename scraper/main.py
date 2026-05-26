@@ -1,3 +1,4 @@
+import argparse
 import asyncio
 import os
 import random
@@ -68,12 +69,21 @@ async def scrape_lego_price(page, product_id):
         return None
 
 async def main():
-    if not API_KEY:
-        print("ERROR: SCRAPER_API_KEY is not set.")
-        return
+    parser = argparse.ArgumentParser(description="Lego Scraper")
+    parser.add_argument("--product-id", type=str, help="Product ID to scrape")
+    args = parser.parse_args()
 
-    sets = await get_sets_to_scrape()
-    if not sets:
+    # Trigger doesn't strictly need the API key for internal users but it's good practice.
+    if not API_KEY:
+        print("WARNING: SCRAPER_API_KEY is not set. Webhooks might fail if API requires it.")
+
+    sets_to_scrape = []
+    if args.product_id:
+        sets_to_scrape = [{"product_id": args.product_id, "status": "IN_STOCK"}]
+    else:
+        sets_to_scrape = await get_sets_to_scrape()
+        
+    if not sets_to_scrape:
         print("No sets found to scrape.")
         return
 
@@ -83,8 +93,8 @@ async def main():
         page = await browser.new_page()
         
         # Iterate sequentially to prevent memory saturation and rate limits
-        for lego_set in sets:
-            if lego_set["status"] == "IN_STOCK":
+        for lego_set in sets_to_scrape:
+            if lego_set.get("status") == "IN_STOCK" or lego_set.get("status") is None:
                 result = await scrape_lego_price(page, lego_set["product_id"])
                 if result:
                     results.append(result)

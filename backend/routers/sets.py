@@ -77,12 +77,17 @@ async def import_sets(file: UploadFile = File(...), db: Session = Depends(databa
     db.commit()
     return {"message": f"Successfully imported {imported_count} sets."}
 
+from routers.scraper import run_scraper_task
+from fastapi import BackgroundTasks
+
 @router.post("/", response_model=schemas.LegoSet)
-def create_set(lego_set: schemas.LegoSetCreate, db: Session = Depends(database.get_db)):
+def create_set(lego_set: schemas.LegoSetCreate, background_tasks: BackgroundTasks, db: Session = Depends(database.get_db)):
     db_set = models.LegoSet(**lego_set.model_dump())
     db.add(db_set)
     db.commit()
     db.refresh(db_set)
+    
+    background_tasks.add_task(run_scraper_task, product_id=db_set.product_id)
     return db_set
 
 @router.get("/", response_model=List[schemas.LegoSet])

@@ -34,9 +34,7 @@ export function PortfolioHistoryChart({ data }: { data: ChartDataPoint[] }) {
     }
   })
 
-  const lastPoint = formattedData[formattedData.length - 1]
-  
-  // Calculate bounds to properly align the gradient
+  // Calculate bounds for YAxis
   const rawMin = Math.min(...formattedData.map(d => Math.min(d.value, d.investment || 0)));
   const rawMax = Math.max(...formattedData.map(d => Math.max(d.value, d.investment || 0)));
   
@@ -44,20 +42,47 @@ export function PortfolioHistoryChart({ data }: { data: ChartDataPoint[] }) {
   const yMin = Math.max(0, rawMin - padding);
   const yMax = rawMax + padding;
   
-  const threshold = lastPoint?.investment || 0;
+  // Calculate horizontal gradient stops based on intersections
+  const stops: React.ReactNode[] = [];
   
-  // SVG gradients use objectBoundingBox, which means they map 0% to the highest point of the path
-  // and 100% to the lowest point of the path.
-  // The path's highest and lowest points correspond strictly to the max and min values of the line.
-  const lineMax = Math.max(...formattedData.map(d => d.value));
-  const lineMin = Math.min(...formattedData.map(d => d.value));
-  
-  let offset = 0;
-  if (lineMax > lineMin) {
-    offset = (lineMax - threshold) / (lineMax - lineMin);
-    offset = Math.max(0, Math.min(1, offset));
-  } else {
-    offset = lineMax >= threshold ? 1 : 0;
+  if (formattedData.length > 1) {
+    const n = formattedData.length;
+    const isProfitable = (formattedData[0].value - (formattedData[0].investment || 0)) >= 0;
+    let currentColor = isProfitable ? '#22c55e' : '#ef4444';
+    
+    stops.push(<stop key="start" offset="0%" stopColor={currentColor} stopOpacity={1} />);
+    
+    for (let i = 0; i < n - 1; i++) {
+      const v1 = formattedData[i].value;
+      const i1 = formattedData[i].investment || 0;
+      const v2 = formattedData[i+1].value;
+      const i2 = formattedData[i+1].investment || 0;
+      
+      const diff1 = v1 - i1;
+      const diff2 = v2 - i2;
+      
+      // Check if lines cross
+      if ((diff1 > 0 && diff2 < 0) || (diff1 < 0 && diff2 > 0) || (diff1 >= 0 && diff2 < 0) || (diff1 <= 0 && diff2 > 0)) {
+        if (diff1 !== 0 || diff2 !== 0) { // Avoid division by zero
+          const f = Math.abs(diff1) / (Math.abs(diff1) + Math.abs(diff2));
+          const stopOffset = (i + f) / (n - 1);
+          const offsetPct = `${(stopOffset * 100).toFixed(2)}%`;
+          
+          const nextColor = (diff2 >= 0) ? '#22c55e' : '#ef4444';
+          
+          stops.push(<stop key={`stop-${i}-1`} offset={offsetPct} stopColor={currentColor} stopOpacity={1} />);
+          stops.push(<stop key={`stop-${i}-2`} offset={offsetPct} stopColor={nextColor} stopOpacity={1} />);
+          
+          currentColor = nextColor;
+        }
+      }
+    }
+    stops.push(<stop key="end" offset="100%" stopColor={currentColor} stopOpacity={1} />);
+  } else if (formattedData.length === 1) {
+    const isProfitable = (formattedData[0].value - (formattedData[0].investment || 0)) >= 0;
+    const currentColor = isProfitable ? '#22c55e' : '#ef4444';
+    stops.push(<stop key="start" offset="0%" stopColor={currentColor} stopOpacity={1} />);
+    stops.push(<stop key="end" offset="100%" stopColor={currentColor} stopOpacity={1} />);
   }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -92,7 +117,7 @@ export function PortfolioHistoryChart({ data }: { data: ChartDataPoint[] }) {
             <div className="flex items-center justify-between gap-4">
               <span className="flex items-center gap-2">
                 <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: valColor }}></span>
-                <span className="text-white/90">Valor de Mercado</span>
+                <span style={{ color: valColor }} className="font-medium">Valor de Mercado</span>
               </span>
               <span style={{ color: valColor }} className="font-bold tracking-tight">€{val.toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
             </div>
@@ -100,7 +125,7 @@ export function PortfolioHistoryChart({ data }: { data: ChartDataPoint[] }) {
               <div className="flex items-center justify-between gap-4">
                 <span className="flex items-center gap-2">
                   <span className="w-2.5 h-2.5 rounded-full bg-[#3b82f6]"></span>
-                  <span className="text-white/90">Inversión</span>
+                  <span className="text-[#3b82f6] font-medium">Inversión</span>
                 </span>
                 <span className="text-[#3b82f6] font-bold tracking-tight">€{inv.toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
               </div>
@@ -121,9 +146,8 @@ export function PortfolioHistoryChart({ data }: { data: ChartDataPoint[] }) {
         <ResponsiveContainer width="100%" height="100%" minHeight={300} minWidth={100}>
           <LineChart data={formattedData} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
             <defs>
-              <linearGradient id="splitColor" x1="0" y1="0" x2="0" y2="1">
-                <stop offset={offset} stopColor="#22c55e" stopOpacity={1} />
-                <stop offset={offset} stopColor="#ef4444" stopOpacity={1} />
+              <linearGradient id="splitColor" x1="0" y1="0" x2="1" y2="0">
+                {stops}
               </linearGradient>
             </defs>
             <CartesianGrid strokeDasharray="3 3" opacity={0.1} />
@@ -139,7 +163,7 @@ export function PortfolioHistoryChart({ data }: { data: ChartDataPoint[] }) {
             />
             <Tooltip content={<CustomTooltip />} />
             <Line 
-              type="monotone" 
+              type="linear" 
               dataKey="value" 
               stroke="url(#splitColor)" 
               strokeWidth={3} 
@@ -147,7 +171,7 @@ export function PortfolioHistoryChart({ data }: { data: ChartDataPoint[] }) {
               activeDot={renderActiveDot} 
             />
             <Line 
-              type="monotone" 
+              type="linear" 
               dataKey="investment" 
               stroke="#3b82f6" 
               strokeWidth={3} 

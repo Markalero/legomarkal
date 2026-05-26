@@ -16,7 +16,50 @@ import { Card, CardContent } from "@/components/ui/card";
 import { ManageSetDialog } from "@/components/manage-set-dialog";
 import { EditSetDialog } from "@/components/edit-set-dialog";
 import { DeleteSetDialog } from "@/components/delete-set-dialog";
-import { Search, Grid, List, ArrowUpDown, ChevronUp, ChevronDown, AlertCircle } from "lucide-react";
+import { Search, Grid, List, ArrowUpDown, ChevronUp, ChevronDown } from "lucide-react";
+
+function getEolStatus(yearEol: string | null) {
+  const currentYearNum = new Date().getFullYear();
+  let text = "En producción";
+  let badgeClass = "bg-success/10 text-success border-success/20";
+  let textClass = "text-success";
+  let dotClass = "bg-success";
+
+  if (yearEol) {
+    let eolYearStr = yearEol;
+    
+    // Scraped strings often look like "2022 | EOL: End of 2026"
+    if (yearEol.includes("|")) {
+      const parts = yearEol.split("|");
+      eolYearStr = parts[parts.length - 1]; 
+    }
+
+    if (eolYearStr.toLowerCase().includes("sin") || eolYearStr.toLowerCase().includes("tba")) {
+      text = "Sin pronóstico";
+      return { text, badgeClass, textClass, dotClass };
+    }
+
+    const eolYearMatch = eolYearStr.match(/\d{4}/);
+    if (eolYearMatch) {
+      const eolYear = parseInt(eolYearMatch[0], 10);
+      if (eolYear < currentYearNum) {
+        const diff = currentYearNum - eolYear;
+        text = `Retirado hace ${diff} año${diff > 1 ? 's' : ''}`;
+        badgeClass = "bg-destructive/10 text-destructive border-destructive/20";
+        textClass = "text-destructive";
+        dotClass = "bg-destructive";
+      } else if (eolYear === currentYearNum || eolYear === currentYearNum + 1) {
+        text = `EOL: ${eolYear}`;
+        badgeClass = "bg-orange-500/10 text-orange-500 border-orange-500/20";
+        textClass = "text-orange-500";
+        dotClass = "bg-orange-500 animate-pulse";
+      } else {
+        text = `EOL: ${eolYear}`;
+      }
+    }
+  }
+  return { text, badgeClass, textClass, dotClass };
+}
 
 type LegoSet = {
   id: number;
@@ -122,7 +165,7 @@ export function InventoryClientTable({ sets }: { sets: LegoSet[] }) {
     return result;
   }, [sets, searchTerm, filterStatus, sortCol, sortDir]);
 
-  const currentYear = new Date().getFullYear().toString();
+
 
   return (
     <div className="space-y-4">
@@ -185,17 +228,14 @@ export function InventoryClientTable({ sets }: { sets: LegoSet[] }) {
             const roi = legoSet.buy_price && currentOrSoldPrice ? ((currentOrSoldPrice - legoSet.buy_price) / legoSet.buy_price) * 100 : 0;
             const absoluteProfit = currentOrSoldPrice ? currentOrSoldPrice - legoSet.buy_price : 0;
             const hasProfit = absoluteProfit > 0;
-            const isEOL = legoSet.year_eol && legoSet.year_eol.includes(currentYear);
+            const eolStatus = getEolStatus(legoSet.year_eol);
 
             return (
               <Card key={legoSet.id} className="overflow-hidden hover:border-primary/50 transition-colors cursor-pointer group animate-in fade-in zoom-in-95 duration-500" onClick={() => router.push(`/inventory/${legoSet.id}`)}>
                 <div className="h-48 bg-white p-4 flex items-center justify-center relative">
-                  {isEOL && !isSold && (
-                    <span className="absolute top-2 left-2 inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-destructive/10 text-destructive border border-destructive/20 animate-pulse">
-                      <AlertCircle className="w-3 h-3 mr-1" />
-                      EOL {currentYear}
-                    </span>
-                  )}
+                  <span className={`absolute top-2 left-2 z-10 inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold border backdrop-blur-sm ${eolStatus.badgeClass}`}>
+                    {eolStatus.text}
+                  </span>
                   {legoSet.image_url ? (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img src={legoSet.image_url} alt={legoSet.name} className="max-w-full max-h-full object-contain group-hover:scale-110 transition-transform duration-300" />
@@ -279,7 +319,7 @@ export function InventoryClientTable({ sets }: { sets: LegoSet[] }) {
                   : 0;
                 const absoluteProfit = currentOrSoldPrice ? currentOrSoldPrice - legoSet.buy_price : 0;
                 const hasProfit = absoluteProfit > 0;
-                const isEOL = legoSet.year_eol && legoSet.year_eol.includes(currentYear);
+                const eolStatus = getEolStatus(legoSet.year_eol);
 
                 return (
                   <TableRow 
@@ -297,19 +337,17 @@ export function InventoryClientTable({ sets }: { sets: LegoSet[] }) {
                     <TableCell className="font-medium block md:table-cell border-b md:border-0">
                       <div className="flex items-center gap-3">
                         {legoSet.image_url && (
-                          <div className="w-12 h-12 rounded overflow-hidden bg-white/5 shrink-0 flex items-center justify-center p-1">
+                          <div className="w-12 h-12 rounded overflow-hidden bg-white/5 shrink-0 flex items-center justify-center p-1 relative z-0">
                             {/* eslint-disable-next-line @next/next/no-img-element */}
                             <img src={legoSet.image_url} alt={legoSet.name} className="max-w-full max-h-full object-contain" />
                           </div>
                         )}
                         <div className="flex flex-col">
                           <span className="truncate max-w-[200px] sm:max-w-xs">{legoSet.name}</span>
-                          {isEOL && !isSold && (
-                            <span className="text-[10px] text-destructive font-bold flex items-center gap-1 mt-1">
-                              <span className="w-1.5 h-1.5 rounded-full bg-destructive animate-pulse" />
-                              EOL {currentYear}
-                            </span>
-                          )}
+                          <span className={`text-[10px] font-bold flex items-center gap-1 mt-1 ${eolStatus.textClass}`}>
+                            <span className={`w-1.5 h-1.5 rounded-full ${eolStatus.dotClass}`} />
+                            {eolStatus.text}
+                          </span>
                         </div>
                       </div>
                     </TableCell>

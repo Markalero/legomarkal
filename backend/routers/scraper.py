@@ -68,22 +68,26 @@ def receive_scraped_prices(payload: WebhookPayload, db: Session = Depends(databa
     return {"message": f"Successfully updated {updated_count} sets"}
 
 import subprocess
+import sys
+from fastapi import BackgroundTasks
+
+def run_scraper_task(product_id: str = None):
+    scraper_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "scraper", "main.py")
+    cmd = [sys.executable, scraper_path]
+    if product_id:
+        cmd.extend(["--product-id", product_id])
+    subprocess.run(cmd, capture_output=True, text=True)
 
 @router.post("/trigger")
-def trigger_scraper(api_key_header: str = Security(api_key_header)):
-    # Trigger doesn't strictly need the API key for internal users but it's good practice.
-    # Actually, let's allow it without api key for simplicity in the frontend,
-    # or just use a simple token if needed. Since it's a local tool, we can just allow it.
-    
-    # Path is ../scraper/main.py relative to backend directory
-    scraper_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "scraper", "main.py")
-    
-    # Run the scraper synchronously so the frontend can show a toast when it's done.
+def trigger_scraper(background_tasks: BackgroundTasks, api_key_header: str = Security(api_key_header)):
+    background_tasks.add_task(run_scraper_task)
+    return {"message": "Scraper iniciado en segundo plano. Los precios se actualizarán en breve."}
+
+@router.get("/status")
+def get_scraper_status(db: Session = Depends(database.get_db)):
     try:
-        result = subprocess.run(["python", scraper_path], capture_output=True, text=True)
-        if result.returncode == 0:
-            return {"message": "Scraper ejecutado correctamente."}
-        else:
-            raise HTTPException(status_code=500, detail=f"Error en scraper: {result.stderr}")
+        last_run = db.query(func.max(models.PriceHistory.recorded_at)).scalar()
+        return {"last_run": last_run.isoformat() if last_run else None}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+

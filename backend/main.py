@@ -41,7 +41,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-from routers import sets, sales, metrics, scraper, autocomplete, auth
+from routers import sets, sales, metrics, scraper, autocomplete, auth, backup
 
 # Include routers
 app.include_router(auth.router, prefix="/api")
@@ -50,6 +50,7 @@ app.include_router(sales.router, prefix="/api")
 app.include_router(metrics.router, prefix="/api")
 app.include_router(scraper.router, prefix="/api")
 app.include_router(autocomplete.router, prefix="/api")
+app.include_router(backup.router, prefix="/api")
 
 @app.get("/")
 def read_root():

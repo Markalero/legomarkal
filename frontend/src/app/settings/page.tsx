@@ -1,14 +1,27 @@
 "use client";
 
 import { Download, Upload } from "lucide-react";
-import { useRef, useState } from "react";
+import { useRef, useState, useEffect } from "react";
 
 export default function SettingsPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isImporting, setIsImporting] = useState(false);
+  const [lastScrape, setLastScrape] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000/api'}/scraper/status`)
+      .then(res => res.json())
+      .then(data => {
+        if (data.last_run) {
+          const d = new Date(data.last_run);
+          setLastScrape(d.toLocaleString('es-ES', { dateStyle: 'short', timeStyle: 'short' }));
+        }
+      })
+      .catch(err => console.error(err));
+  }, []);
 
   const handleExport = () => {
-    window.location.href = `${process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000/api'}/sets/export`;
+    window.location.href = `${process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000/api'}/backup/export`;
   };
 
   const handleImportClick = () => {
@@ -24,17 +37,17 @@ export default function SettingsPage() {
     formData.append("file", file);
 
     try {
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000/api'}/sets/import`, {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000/api'}/backup/import`, {
         method: "POST",
         body: formData,
       });
       
       if (res.ok) {
-        alert("Inventario importado correctamente.");
+        alert("Copia de seguridad restaurada correctamente. Todo tu inventario ha sido actualizado.");
         window.location.reload();
       } else {
         const err = await res.json();
-        alert(`Error al importar: ${err.detail || "Desconocido"}`);
+        alert(`Error al restaurar: ${err.detail || "Desconocido"}`);
       }
     } catch (error) {
       console.error(error);
@@ -56,9 +69,9 @@ export default function SettingsPage() {
 
       <div className="grid gap-6">
         <div className="rounded-xl border bg-card p-6 shadow-sm">
-          <h3 className="text-lg font-semibold mb-4">Herramientas de Exportación</h3>
+          <h3 className="text-lg font-semibold mb-4">Copia de Seguridad (Backup & Restore)</h3>
           <p className="text-sm text-muted-foreground mb-4">
-            Respalda todo tu inventario descargando un archivo CSV, o sube un archivo para importar múltiples compras a la vez. Las cabeceras del CSV de importación deben coincidir con las del archivo descargado.
+            Genera un archivo ZIP con todo tu inventario, ventas, historial de precios y recibos adjuntos. Al restaurar una copia, <strong className="text-destructive">se borrarán los datos actuales</strong> para reemplazarlos por los del ZIP.
           </p>
           <div className="flex items-center gap-4">
             <button 
@@ -66,7 +79,7 @@ export default function SettingsPage() {
               className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-md text-sm font-medium hover:bg-primary/90 transition-colors"
             >
               <Download className="w-4 h-4" />
-              Descargar CSV
+              Exportar Copia (.zip)
             </button>
             <button 
               onClick={handleImportClick}
@@ -74,11 +87,11 @@ export default function SettingsPage() {
               className="flex items-center gap-2 px-4 py-2 bg-secondary text-secondary-foreground rounded-md text-sm font-medium hover:bg-secondary/80 transition-colors disabled:opacity-50"
             >
               <Upload className="w-4 h-4" />
-              {isImporting ? "Importando..." : "Subir CSV"}
+              {isImporting ? "Restaurando..." : "Restaurar Copia (.zip)"}
             </button>
             <input 
               type="file" 
-              accept=".csv" 
+              accept=".zip" 
               ref={fileInputRef} 
               className="hidden" 
               onChange={handleFileChange} 
@@ -95,7 +108,9 @@ export default function SettingsPage() {
             <div className="px-3 py-1 bg-success/20 text-success text-sm font-medium rounded-full">
               Activo y Sincronizado
             </div>
-            <span className="text-xs text-muted-foreground">Última ejecución: Hoy, 03:00 AM</span>
+            <span className="text-xs text-muted-foreground">
+              Última ejecución: {lastScrape ? lastScrape : "Nunca"}
+            </span>
           </div>
         </div>
 

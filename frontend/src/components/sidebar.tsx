@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Package, LayoutDashboard, Settings } from "lucide-react";
+import { Package, LayoutDashboard, Settings, LogOut } from "lucide-react";
 import { ModeToggle } from "@/components/mode-toggle";
 import { ScraperTrigger } from "@/components/scraper-trigger";
 
@@ -12,6 +12,11 @@ export function Sidebar() {
   if (pathname === "/login") {
     return null;
   }
+
+  const handleLogout = () => {
+    document.cookie = "legomarkal_token=; path=/; max-age=0";
+    window.location.href = "/login";
+  };
 
   return (
     <aside className="w-64 border-r bg-card flex flex-col">
@@ -32,12 +37,19 @@ export function Sidebar() {
           <span>Inventario</span>
         </Link>
       </nav>
-      <div className="p-4 border-t">
+      <div className="p-4 border-t space-y-2">
         <ScraperTrigger />
         <Link href="/settings" className="flex items-center gap-3 px-3 py-2 text-sm font-medium w-full text-left rounded-md hover:bg-secondary text-muted-foreground transition-colors">
           <Settings className="w-4 h-4" />
           <span>Ajustes</span>
         </Link>
+        <button 
+          onClick={handleLogout}
+          className="flex items-center gap-3 px-3 py-2 text-sm font-medium w-full text-left rounded-md hover:bg-destructive/10 text-destructive transition-colors"
+        >
+          <LogOut className="w-4 h-4" />
+          <span>Cerrar sesión</span>
+        </button>
       </div>
     </aside>
   );
