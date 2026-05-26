@@ -87,7 +87,7 @@ export default async function DashboardPage() {
               </CardHeader>
               <CardContent>
                 <div className="flex items-baseline gap-2">
-                  <div className="text-3xl font-bold text-success">€{m.current_value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+                  <div className={`text-3xl font-bold ${m.current_value < m.total_investment ? 'text-destructive' : 'text-success'}`}>€{m.current_value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
                 </div>
                 <p className={`text-xs mt-1 font-semibold ${m.unrealized_profit >= 0 ? 'text-success' : 'text-destructive'}`}>
                   {m.unrealized_profit >= 0 ? '+' : ''}€{m.unrealized_profit.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} (Stock)

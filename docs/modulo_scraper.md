@@ -24,7 +24,7 @@ El script principal está escrito en Python asíncrono (`asyncio`) para manejar 
    - Se navega a la URL oficial del producto en BrickEconomy (ej: `https://www.brickeconomy.com/set/{id}-1/`).
    - **Evasión de Antibots:** Se aplica una pausa asíncrona aleatoria (`asyncio.sleep` de 2 a 4 segundos) que simula el comportamiento de lectura humano, evitando bloqueos por *Rate Limiting* o servicios como Cloudflare.
    - **Análisis del DOM:** Una vez cargada la página, se extrae el código HTML crudo y se parsea utilizando **BeautifulSoup**.
-   - **Limpieza de Datos:** El algoritmo busca el bloque div correspondiente a "Retail price". Dado que el precio devuelto incluye divisas y caracteres extraños, se aplica una Expresión Regular (`re.sub(r'[^\d.]', '', val)`) para aislar el número decimal en formato flotante puro.
+   - **Limpieza de Datos:** El algoritmo busca iterativamente en los bloques los campos correspondientes a "Value" (valor actual de mercado) y, si no lo encuentra, retrocede al "Retail price". Se aplican Expresiones Regulares para limpiar divisas y quedarse con el valor numérico puro.
 
 3. **Orquestación y Envío (`main`)**
    - El procesamiento de todos los sets se realiza de forma **secuencial** dentro del mismo contexto de navegador para mantener estable el uso de RAM.

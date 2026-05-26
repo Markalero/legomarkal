@@ -2,7 +2,7 @@ import asyncio
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from typing import Optional
-from playwright.async_api import async_playwright
+from playwright.sync_api import sync_playwright
 
 router = APIRouter(
     prefix="/autocomplete",
@@ -19,27 +19,39 @@ class AutocompleteResponse(BaseModel):
     current_price: Optional[str] = None
 
 @router.get("/{product_id}", response_model=AutocompleteResponse)
-async def get_set_info(product_id: str):
+def get_set_info(product_id: str):
     set_num = product_id if "-" in product_id else f"{product_id}-1"
     url = f"https://www.brickeconomy.com/set/{set_num}/"
     
-    async with async_playwright() as p:
-        browser = await p.chromium.launch(headless=True)
-        context = await browser.new_context(
+    with sync_playwright() as p:
+        browser = p.chromium.launch(headless=True)
+        context = browser.new_context(
             user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
         )
-        page = await context.new_page()
+        page = context.new_page()
+        
         try:
-            # Go to the url and wait until dom is loaded
-            response = await page.goto(url, wait_until="domcontentloaded")
+            # Add stealth scripts
+            page.add_init_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
+            
+            # Go to page and wait for content
+            response = page.goto(url, wait_until="domcontentloaded", timeout=30000)
+            
             if response and response.status == 404:
-                raise HTTPException(status_code=404, detail="Set not found in BrickEconomy")
+                raise HTTPException(status_code=404, detail="Set not found")
                 
-            # Wait for any anti-bot challenge to complete
-            await asyncio.sleep(2)
+            # Random delay
+            import time
+            import random
+            time.sleep(random.uniform(1.0, 2.5))
+            
+            # Wait for main content to avoid cloudflare
+            page.wait_for_selector("div.container", timeout=15000)
+            
+            html_content = page.content()
             
             # Find the title
-            title_text = await page.title()
+            title_text = page.title()
             
             # Usually the title is something like "LEGO 75192 Star Wars Millennium Falcon | BrickEconomy"
             name = title_text.replace(" | BrickEconomy", "")
@@ -60,7 +72,7 @@ async def get_set_info(product_id: str):
 
             try:
                 # Get the page html
-                html = await page.content()
+                html = page.content()
                 from bs4 import BeautifulSoup
                 import re
                 soup = BeautifulSoup(html, 'html.parser')
@@ -132,4 +144,4 @@ async def get_set_info(product_id: str):
             print("Scraping error:", e)
             raise HTTPException(status_code=500, detail="Error scraping data")
         finally:
-            await browser.close()
+            browser.close()

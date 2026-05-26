@@ -21,7 +21,7 @@ try:
     print("INFO: Synchronizing database schema...")
     Base.metadata.create_all(bind=engine)
     print("INFO: Database schema sync complete.")
-except Exception as e:
+except Exception:
     print("CRITICAL: Failed to connect to database or create tables!", file=sys.stderr)
     traceback.print_exc()
     sys.exit(1)
@@ -35,13 +35,16 @@ app = FastAPI(
 # CORS config
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"], # For production, change to specific origins
+    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
+from routers import sets, sales, metrics, scraper, autocomplete, auth
+
 # Include routers
+app.include_router(auth.router, prefix="/api")
 app.include_router(sets.router, prefix="/api")
 app.include_router(sales.router, prefix="/api")
 app.include_router(metrics.router, prefix="/api")

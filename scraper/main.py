@@ -37,6 +37,7 @@ async def scrape_lego_price(page, product_id):
         soup = BeautifulSoup(html, 'html.parser')
         
         retail_price_val = None
+        value_val = None
         
         for div in soup.find_all('div', class_='row'):
             cols = div.find_all('div')
@@ -47,13 +48,19 @@ async def scrape_lego_price(page, product_id):
                     cleaned_price = re.sub(r'[^\d.]', '', val)
                     if cleaned_price:
                         retail_price_val = float(cleaned_price)
-                        break
+                elif lbl == "Value":
+                    cleaned_value = re.sub(r'[^\d.]', '', val)
+                    if cleaned_value:
+                        value_val = float(cleaned_value)
         
-        if retail_price_val is not None:
-            print(f"Success! {product_id} price: {retail_price_val}")
-            return {"product_id": product_id, "current_price": retail_price_val}
+        # Prefer 'Value' (market price), fallback to 'Retail price'
+        final_price = value_val if value_val is not None else retail_price_val
+        
+        if final_price is not None:
+            print(f"Success! {product_id} price: {final_price} (Value: {value_val}, Retail: {retail_price_val})")
+            return {"product_id": product_id, "current_price": final_price}
         else:
-            print(f"Could not find retail price for {product_id}")
+            print(f"Could not find any price for {product_id}")
             return None
             
     except Exception as e:

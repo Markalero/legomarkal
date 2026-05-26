@@ -19,6 +19,9 @@ export function AddSetDialog() {
   const [loading, setLoading] = useState(false);
   const [searching, setSearching] = useState(false);
   const [hasSearched, setHasSearched] = useState(false);
+  const [isFound, setIsFound] = useState(false);
+  const [manualOverride, setManualOverride] = useState(false);
+  const [shake, setShake] = useState(false);
   const router = useRouter();
 
   const [formData, setFormData] = useState({
@@ -65,12 +68,19 @@ export function AddSetDialog() {
           msrp: data.retail_price || prev.msrp,
           current_price: data.current_price || prev.current_price,
         }));
+        setIsFound(true);
         toast.success("Datos obtenidos de BrickEconomy");
       } else {
+        setIsFound(false);
+        setShake(true);
+        setTimeout(() => setShake(false), 500);
         toast.warning("No se encontró el set o el servicio está ocupado. Puedes introducir los datos manualmente.");
       }
     } catch (err) {
       console.error(err);
+      setIsFound(false);
+      setShake(true);
+      setTimeout(() => setShake(false), 500);
       toast.error("Error de conexión con el servidor. Verifica que el backend esté en marcha.");
     } finally {
       setSearching(false);
@@ -107,6 +117,9 @@ export function AddSetDialog() {
 
       setOpen(false);
       setFormData({ product_id: "", name: "", theme: "", year_eol: "", buy_price: "", msrp: "", current_price: "", quantity: "1", condition: "MISB", notes: "", image_url: "" });
+      setIsFound(false);
+      setManualOverride(false);
+      setHasSearched(false);
       toast.success("Set añadido exitosamente al inventario.");
       router.refresh();
     } catch (err) {
@@ -130,10 +143,10 @@ export function AddSetDialog() {
         <form onSubmit={handleSubmit} className="space-y-4 py-4 max-h-[70vh] overflow-y-auto overflow-x-hidden pr-2">
 
           <div className="flex flex-col">
-            <div className="flex gap-2 items-end">
+            <div className={`flex gap-2 items-end ${shake ? 'animate-shake' : ''}`}>
               <div className="space-y-2 flex-1">
                 <label htmlFor="product_id" className="text-sm font-medium">ID del Set *</label>
-                <Input id="product_id" name="product_id" required value={formData.product_id} onChange={handleChange} onKeyDown={handleKeyDown} placeholder="ej. 75192" className="bg-background" />
+                <Input id="product_id" name="product_id" required value={formData.product_id} onChange={handleChange} onKeyDown={handleKeyDown} placeholder="ej. 75192" className={`bg-background ${shake ? 'border-destructive text-destructive' : ''}`} />
               </div>
               <Button data-testid="autocomplete-btn" type="button" variant="secondary" onClick={handleAutocomplete} disabled={searching} className="mb-[2px]">
                 {searching ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
@@ -158,7 +171,16 @@ export function AddSetDialog() {
             )}
           </div>
 
-          {(formData.name || hasSearched) && !searching && (
+          {hasSearched && !isFound && !searching && !manualOverride && (
+            <div className="flex flex-col items-center justify-center py-4 space-y-2 animate-in fade-in">
+              <p className="text-sm text-destructive">No se pudo obtener información.</p>
+              <Button type="button" variant="link" size="sm" onClick={() => setManualOverride(true)}>
+                Introducir datos manualmente
+              </Button>
+            </div>
+          )}
+
+          {(isFound || manualOverride) && !searching && (
             <div className="space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-300">
               <div className="flex gap-4 items-start">
                 {formData.image_url && (
@@ -200,7 +222,7 @@ export function AddSetDialog() {
                   <Input id="msrp" name="msrp" type="number" step="0.01" value={formData.msrp} onChange={handleChange} placeholder="0.00" className="bg-muted/50 text-muted-foreground focus-visible:ring-transparent" />
                 </div>
                 <div className="space-y-2">
-                  <label htmlFor="current_price" className="text-sm font-medium text-success">V. Mercado</label>
+                  <label htmlFor="current_price" className="text-sm font-medium">V. Mercado</label>
                   <Input id="current_price" name="current_price" type="number" step="0.01" value={formData.current_price} onChange={handleChange} placeholder="0.00" className="bg-muted/50 text-muted-foreground focus-visible:ring-transparent" />
                 </div>
                 <div className="space-y-2">

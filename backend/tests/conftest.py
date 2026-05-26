@@ -10,7 +10,6 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from main import app
 from database import Base, get_db
-import models
 
 # Use SQLite in-memory for testing
 SQLALCHEMY_DATABASE_URL = "sqlite://"

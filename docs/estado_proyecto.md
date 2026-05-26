@@ -9,44 +9,38 @@ Este documento refleja el estado actual del desarrollo del proyecto, separando l
 ### 🧱 Motor Backend (FastAPI + PostgreSQL)
 - **API REST Robusta:** Endpoints para gestión completa (CRUD) de Sets de LEGO, Ventas y Métricas Financieras.
 - **Base de Datos Relacional:** Estructura en Supabase manejada mediante SQLAlchemy, con tablas para `LegoSet`, `Sale` y `PriceHistory`.
-- **Inyección de Metadatos:** Soporte completo para el registro de `year_eol` (año de retiro), precio de compra, condición del set, y notas personales.
-- **Motor de Scraping en Vivo:** Endpoint de Autocompletado (`/api/autocomplete/`) que extrae en tiempo real nombres, temas e imágenes desde BrickEconomy usando Playwright.
-- **Webhook de Sincronización:** Ruta segura (`POST /api/scraper/webhook`) protegida por API Key para recibir actualizaciones masivas de precios sin generar bloqueos en la base de datos (Transacciones Atómicas).
+- **Inyección de Metadatos y Autocompletado:** Soporte completo para el registro de `year_eol` (año de retiro), precio de compra, condición del set, y notas personales. El scraper extrae en tiempo real tanto el precio de venta recomendado (MSRP) como el **valor de mercado actual**.
+- **Gestión Avanzada de Ventas:** Endpoint de ventas que permite asignar **fecha de venta personalizada**. Cálculo preciso de ROI Consolidado sobre ventas (Beneficio Realizado) y ROI Potencial sobre stock (Beneficio Latente).
+- **Webhook de Sincronización y Scraper Manual:** Ruta segura (`POST /api/scraper/webhook`) y nuevo endpoint (`POST /api/scraper/trigger`) para forzar la ejecución del scraper en segundo plano a demanda del usuario.
 
 ### 🖥️ Interfaz de Usuario (Next.js + Tailwind CSS)
-- **Panel Principal (Dashboard):** Tabla de inventario dinámica con indicadores visuales de rentabilidad (ROI), inversión total y valor actual de mercado.
-- **Diálogo de Creación Inteligente:** Un modal dinámico que oculta los campos manuales hasta que se realiza una búsqueda del producto. Autocompleta automáticamente datos oficiales si el scraper funciona, o permite entrada manual si falla.
-- **Vista de Detalles del Set (`/inventory/[id]`):** Una pantalla inmersiva para cada producto con imagen en grande, tarjetas financieras, y registro de historial.
-- **Gestión Avanzada de Ventas:** Capacidad desde el panel frontal para deshacer ventas (devolviendo el set a `IN_STOCK`) o editar parámetros de una venta (plataforma o precio final) en caso de error.
+- **Panel Principal (Dashboard):** Paneles de Inversión, Valor Estimado (con ROI Potencial) y ROI Consolidado desglosado en tramos de tiempo reales (Este mes, Últ. 6 meses, Histórico Total).
+- **Gráfico de Evolución del Portfolio:** Gráfica visual dinámica que pinta en verde (beneficios) o rojo (pérdidas) la evolución del valor de mercado respecto a la inversión base a lo largo del tiempo.
+- **Top Performers:** Lista clasificada (Leaderboard) integrada en el panel que destaca automáticamente los sets con mejor rentabilidad porcentual, enlazando directamente al detalle de cada producto.
+- **Diálogo de Creación Inteligente:** Un modal dinámico que pre-rellena datos automáticamente desde BrickEconomy, indicando visualmente (blanco vs gris) qué campos son editables y cuáles son automáticos.
+- **Tabla de Inventario y Vista Cuadrícula:** Vistas intercambiables, filtrables y ordenables (ej. ordenación por rentabilidad) con peso visual balanceado (insignias tenues para estados).
+- **Vista de Detalles del Set (`/inventory/[id]`):** Pantalla inmersiva para cada producto con imagen grande, tarjetas financieras, y registro de historial.
 
 ### ⚙️ Automatización (Scraper Worker)
-- **Worker Independiente (`scraper/main.py`):** Un módulo desacoplado diseñado para integrarse con GitHub Actions.
-- **Extracción Masiva "Zero-Cost":** Navega asíncronamente con navegadores ocultos (Chromium) aplicando retardos aleatorios para evitar ser bloqueado (Cloudflare/Rate Limiting).
-- **Procesamiento Histórico:** Actualiza los precios del inventario y genera un punto diario en el historial para trazar gráficas de evolución a largo plazo.
+- **Worker Independiente (`scraper/main.py`):** Un módulo desacoplado que navega asíncronamente con navegadores ocultos (Chromium) saltando bloqueos (Cloudflare/Rate Limiting).
+- **Procesamiento Histórico:** Actualiza los precios del inventario y genera puntos de historial para trazar la gráfica del dashboard.
 
 ### 🧹 Calidad de Código
 - **Tests Unitarios:** Batería de pruebas en Vitest que aseguran que los formularios críticos no se rompan tras nuevas actualizaciones.
-- **Limpieza Estructural:** Repositorio optimizado, libre de scripts de prueba obsoletos y archivos de volcado pesado.
 
 ---
 
-## 2. Planificado para Futuras Implementaciones (Roadmap)
-
-Aunque el sistema principal ya es 100% funcional, hay varias áreas de expansión natural planificadas para llevar la plataforma al siguiente nivel:
+## 2. Planificado para Futuras Implementaciones (Roadmap / Faltante)
 
 ### 🔒 Autenticación y Seguridad
 - **Sistema de Login:** Implementación de autenticación (JWT o NextAuth) para proteger el acceso al panel, evitando que cualquier visitante pueda modificar tu inventario.
 - **Soporte Multi-Usuario:** Posibilidad de que cada coleccionista tenga su propia cuenta separada dentro de la misma instancia.
 
-### 📈 Analítica y Gráficas Avanzadas
-- **Gráfico de Evolución del Portfolio:** Una gráfica visual de líneas que muestre el crecimiento histórico del valor total del almacén a lo largo de los meses.
-- **Top Performers:** Un panel que destaque automáticamente los sets que mayor rentabilidad porcentual han generado en los últimos 30 días.
-
-### 🛠 Herramientas de Productividad
+### 🛠 Herramientas de Productividad y Datos
 - **Importación / Exportación Masiva:** Capacidad para subir un archivo CSV o Excel con compras pasadas, o descargar el inventario completo para hacer respaldos locales.
 - **Gestión de Monedas (Multi-Currency):** Conversor de divisas integrado por si compras/vendes piezas en USD o GBP, normalizando el ROI al Euro.
-- **Alertas de Retiro (EOL):** Notificaciones en el Dashboard de los sets que están programados para ser retirados ese mismo año (basándose en el campo `year_eol`).
+- **Alertas de Retiro (EOL):** Notificaciones visuales de los sets que están programados para ser retirados ese mismo año (basándose en el campo `year_eol`).
 
-### 🚀 Despliegue Automatizado
+### 🚀 Despliegue Automatizado y UX
 - **Pipeline de GitHub Actions Real:** Desplegar formalmente el archivo `.github/workflows/scraper.yml` para que el worker empiece a correr religiosamente todas las noches sin requerir intervención humana.
-- **Optimización Mobile:** Ajustar los modales y las tablas de datos para que la app se maneje de forma cómoda desde teléfonos móviles a la hora de actualizar una venta sobre la marcha.
+- **Optimización Mobile Extrema:** Repasar a fondo las tablas y la vista Grid en resoluciones muy pequeñas (teléfonos móviles) asegurando una experiencia completamente nativa y fluida.

@@ -3,9 +3,11 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { RefreshCw } from "lucide-react";
 import { toast } from "sonner";
+import { useRouter } from "next/navigation";
 
 export function ScraperTrigger() {
   const [loading, setLoading] = useState(false);
+  const router = useRouter();
 
   const handleTrigger = async () => {
     setLoading(true);
@@ -17,9 +19,10 @@ export function ScraperTrigger() {
       
       if (!res.ok) throw new Error("Error triggering scraper");
       
-      toast.success("Scraper iniciado en segundo plano", {
-        description: "Se actualizarán los precios de los sets en stock próximamente."
+      toast.success("Scraper completado", {
+        description: "Los precios de tus sets en stock han sido actualizados."
       });
+      router.refresh();
     } catch (err) {
       console.error(err);
       toast.error("Error al iniciar el scraper");

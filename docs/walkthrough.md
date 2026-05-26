@@ -15,18 +15,34 @@ El **Dashboard** (`/`) ha recibido un lavado de cara espectacular. Ahora cuenta 
 - **Extracción de BrickEconomy:** La varita mágica del menú "Añadir Set" ya no depende de la API de Rebrickable. Ahora activa un punto de acceso en tu servidor backend (`/api/autocomplete/`).
 - **Navegación Invisible:** Al pulsar el botón, tu servidor levanta una instancia oculta de Chromium (*Playwright*), navega hasta BrickEconomy, evade sus bloqueos Cloudflare imitando a un humano, y te devuelve la foto oficial y el nombre del Lego en tiempo real. ¡Has roto las cadenas de servicios de terceros!
 
-## 3. Condiciones y Notas de Estado
-La tabla de inventario (`/inventory`) ahora te permite registrar el estado real de cada producto físico, algo vital para el valor de mercado:
-- `MISB`: Nuevo en Caja Sellada.
-- `CIB`: Abierto pero Completo.
-- `USED`: Suelto/Usado.
+## 2. Novedades: Seguridad, CSV y Scraper Optimizado
 
-Además, cuentas con un campo de notas (`notes`) para escribir desperfectos (ej. "La esquina está rota") sin ensuciar el nombre del set.
+He completado la implementación de las tres grandes características solicitadas.
 
-## 4. Estabilidad del Motor y Base de Datos (Back-End)
-- **Histórico Inmutable:** He creado una tabla `price_history`. A partir de ahora, cada vez que el Scraper nocturno detecte un cambio de precio, se registrará un evento histórico, permitiéndote dibujar un gráfico de la fluctuación del valor de un set con el paso del tiempo.
-- **Adiós a los cuellos de botella:** El archivo `scraper/main.py` ha sido blindado. Si Playwright no puede leer una página de LEGO, simplemente continuará con el siguiente producto sin estrellar el sistema (gestión parcial de fallos) y usa retardos asíncronos (`asyncio.sleep`) para esquivar bloqueos anti-bot.
-- **Rendimiento N+1 resuelto:** El Webhook de la API ahora aplica el patrón "Batch Select" a la base de datos, lo que significa que procesar 100 sets de golpe por el scraper le costará al servidor la misma carga (una sola transacción masiva en memoria) que procesar 1 solo.
+## 1. Seguridad y Login con Contraseña Maestra 🔒
+Hemos protegido tu aplicación para que sólo tú puedas acceder a ella y modificar el inventario.
+- **Backend**: Se ha configurado una contraseña maestra a través del archivo `.env` (`ADMIN_PASSWORD`). La API ahora tiene un endpoint de login que devuelve un token de autenticación.
+- **Frontend**: 
+  - Hemos creado una nueva página moderna `/login` con el logo animado donde debes introducir tu contraseña.
+  - Hemos añadido un **Middleware** de Next.js. Si alguien intenta entrar a `/`, `/inventory` o `/settings` sin el token, será redirigido automáticamente a la página de login.
+
+## 2. Exportación e Importación Masiva (CSV) 📥📤
+Ahora puedes hacer copias de seguridad fácilmente y añadir decenas de sets de una vez.
+- Se ha añadido la sección **Herramientas de Exportación** dentro de la pestaña "Ajustes".
+- **Descargar CSV**: Un botón que descarga al instante todo tu inventario en formato `.csv`, perfecto para abrir en Excel o Google Sheets.
+- **Subir CSV**: Un botón para importar masivamente productos a tu inventario utilizando el mismo formato del CSV exportado (necesita al menos `product_id`, `name` y `buy_price`).
+
+## 3. Optimización del Motor Scraper ⚙️
+El scraper automático de segundo plano (que se puede disparar desde GitHub Actions o desde el botón manual) tenía un comportamiento en el que sólo leía el precio original (MSRP).
+- Lo hemos actualizado para que ahora **priorice la búsqueda del 'Value' (Valor de mercado actual)**, y si no lo encuentra, como respaldo utilice el precio de venta original. Esto asegura que tus gráficas de evolución reflejen siempre el valor especulativo de mercado real.
+
+### Verificación
+✅ Compilación de Next.js exitosa sin errores de TypeScript.
+✅ El backend se ha reiniciado y está sirviendo las nuevas rutas CSV y Auth.
+✅ El scraper ha sido revisado lógicamente para interceptar "Value".
+
+> [!TIP]
+> Intenta acceder a `http://localhost:3000/`. Debería redirigirte inmediatamente a la página de inicio de sesión (`/login`). Tu contraseña actual configurada es `markaleroputero69`.
 
 ## 5. Suite de Pruebas Automatizadas (QA Testing)
 ¡El sistema ahora cuenta con validación profesional y automatizada! Cada vez que modifiques el código, puedes asegurarte de que nada se ha roto ejecutando:

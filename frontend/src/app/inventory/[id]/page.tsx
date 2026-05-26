@@ -11,6 +11,7 @@ import { ManageSetDialog } from "@/components/manage-set-dialog";
 
 import { EditSaleDialog } from "@/components/edit-sale-dialog";
 import { UndoSaleDialog } from "@/components/undo-sale-dialog";
+import { SetHistoryChart } from "@/components/set-history-chart";
 
 export const dynamic = 'force-dynamic';
 
@@ -138,9 +139,7 @@ export default async function SetDetailsPage({ params }: { params: { id: string 
               </CardTitle>
               <CardDescription>Evolución del valor de mercado de este set.</CardDescription>
             </CardHeader>
-            <CardContent className="h-[250px] flex items-center justify-center border-t border-white/5 m-6 rounded-md bg-black/5">
-              <p className="text-sm text-muted-foreground">El gráfico estará disponible una vez haya suficientes datos históricos.</p>
-            </CardContent>
+            <SetHistoryChart data={set.price_history || []} />
           </Card>
 
           {set.sales && set.sales.length > 0 && (

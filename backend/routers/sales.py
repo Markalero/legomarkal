@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
 from sqlalchemy.orm import Session
 from typing import List, Optional
 import schemas, models, database
-from services.storage import upload_receipt
+from services.storage import upload_receipt, delete_receipt
 
 router = APIRouter(
     prefix="/sales",
@@ -29,7 +29,16 @@ def register_sale(
     # Upload receipt if provided
     receipt_url = None
     if receipt:
-        receipt_url = upload_receipt(receipt)
+        from datetime import date
+        date_str = sell_date if sell_date else date.today().isoformat()
+        safe_set_name = "".join([c if c.isalnum() else "_" for c in db_set.name])
+        # To avoid multiple underscores
+        import re
+        safe_set_name = re.sub(r'_+', '_', safe_set_name).strip('_')
+        
+        base_name = f"{date_str}_{safe_set_name}_{sell_price}"
+        
+        receipt_url = upload_receipt(receipt, base_name=base_name)
         if not receipt_url:
             raise HTTPException(status_code=500, detail="Failed to upload receipt")
 
@@ -83,6 +92,9 @@ def delete_sale(sale_id: int, db: Session = Depends(database.get_db)):
     # (assuming 1 sale per set for now)
     if db_set:
         db_set.status = models.SetStatus.IN_STOCK
+        
+    if db_sale.receipt_url:
+        delete_receipt(db_sale.receipt_url)
         
     db.delete(db_sale)
     db.commit()

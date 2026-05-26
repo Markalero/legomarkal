@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, Security
 from fastapi.security.api_key import APIKeyHeader
 from sqlalchemy.orm import Session
-from typing import List, Optional
+from typing import List
 from pydantic import BaseModel
 import os
 import models, database
@@ -75,11 +75,15 @@ def trigger_scraper(api_key_header: str = Security(api_key_header)):
     # Actually, let's allow it without api key for simplicity in the frontend,
     # or just use a simple token if needed. Since it's a local tool, we can just allow it.
     
-    scraper_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "scraper", "main.py")
+    # Path is ../scraper/main.py relative to backend directory
+    scraper_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "scraper", "main.py")
     
-    # Run the scraper in the background. It will hit the /webhook endpoint when done.
+    # Run the scraper synchronously so the frontend can show a toast when it's done.
     try:
-        subprocess.Popen(["python", scraper_path])
-        return {"message": "Scraper disparado en segundo plano."}
+        result = subprocess.run(["python", scraper_path], capture_output=True, text=True)
+        if result.returncode == 0:
+            return {"message": "Scraper ejecutado correctamente."}
+        else:
+            raise HTTPException(status_code=500, detail=f"Error en scraper: {result.stderr}")
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
