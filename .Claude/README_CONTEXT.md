@@ -589,7 +589,7 @@ Conclusión de admin-panel:
 
 ### api/app/scraper/brickeconomy_scraper.py
 - Finalidad: scraping de BrickEconomy.
-- Qué obtiene: precios detectados en página y rango min/max.
+- Qué obtiene: precios detectados en página y rango min/max, priorizando Nuevo/Sellado frente a abierto.
 - Resultado: segunda fuente para enriquecimiento de señal de mercado.
 
 ### api/app/scraper/ebay_scraper.py

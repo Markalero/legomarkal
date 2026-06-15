@@ -4,6 +4,8 @@ from pydantic import BaseModel
 from typing import Optional
 from playwright.sync_api import sync_playwright
 
+from price_utils import extract_brickeconomy_prices
+
 router = APIRouter(
     prefix="/autocomplete",
     tags=["autocomplete"]
@@ -74,7 +76,6 @@ def get_set_info(product_id: str):
                 # Get the page html
                 html = page.content()
                 from bs4 import BeautifulSoup
-                import re
                 soup = BeautifulSoup(html, 'html.parser')
                 
                 # Image
@@ -110,20 +111,12 @@ def get_set_info(product_id: str):
                     year_eol_val = f"{year} | EOL: {retire}"
                 else:
                     year_eol_val = year
-                    
-                retail_price_raw = data_dict.get("Retail price", "")
-                if retail_price_raw:
-                    cleaned_price = re.sub(r'[^\d.]', '', retail_price_raw)
-                    if cleaned_price:
-                        retail_price_val = cleaned_price
 
-                # Extract Value (Market Price)
-                value_raw = data_dict.get("Value", "")
-                current_price_val = ""
-                if value_raw:
-                    cleaned_value = re.sub(r'[^\d.]', '', value_raw)
-                    if cleaned_value:
-                        current_price_val = cleaned_value
+                retail_price_num, current_price_num = extract_brickeconomy_prices(html)
+                if retail_price_num is not None:
+                    retail_price_val = f"{retail_price_num:.2f}"
+                if current_price_num is not None:
+                    current_price_val = f"{current_price_num:.2f}"
 
             except Exception as metadata_err:
                 print("Could not parse metadata:", metadata_err)

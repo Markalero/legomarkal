@@ -86,8 +86,10 @@ def get_portfolio_history(db: Session = Depends(database.get_db)):
     
     history_records = db.query(
         func.date(models.PriceHistory.recorded_at).label('date'),
-        func.sum(models.PriceHistory.price).label('total_value')
-    ).group_by(func.date(models.PriceHistory.recorded_at)).order_by(func.date(models.PriceHistory.recorded_at)).all()
+        func.sum(models.PriceHistory.price * models.LegoSet.quantity).label('total_value')
+    ).join(models.LegoSet, models.PriceHistory.lego_set_id == models.LegoSet.id)\
+     .group_by(func.date(models.PriceHistory.recorded_at))\
+     .order_by(func.date(models.PriceHistory.recorded_at)).all()
     
     chart_data = []
     for r in history_records:

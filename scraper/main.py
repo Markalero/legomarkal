@@ -1,119 +1,55 @@
 import argparse
 import asyncio
 import os
-import random
-import requests
-from playwright.async_api import async_playwright
+import sys
+
+# Ensure backend modules are available before importing strategies
+BACKEND_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "backend")
+if BACKEND_DIR not in sys.path:
+    sys.path.insert(0, BACKEND_DIR)
+
+from orchestrator import ScraperOrchestrator
+from strategies.full_data import FullDataScrapeStrategy
+from strategies.price_only import PriceOnlyScrapeStrategy
 
 API_BASE_URL = os.environ.get("API_BASE_URL", "http://127.0.0.1:8000/api")
 API_KEY = os.environ.get("SCRAPER_API_KEY")
 
-async def get_sets_to_scrape():
-    print(f"Fetching sets from {API_BASE_URL}/sets/")
-    try:
-        response = requests.get(f"{API_BASE_URL}/sets/")
-        response.raise_for_status()
-        return response.json()
-    except Exception as e:
-        print(f"Failed to fetch sets: {e}")
-        return []
-
-async def scrape_lego_price(page, product_id):
-    print(f"Scraping price for product {product_id}...")
-    try:
-        set_num = product_id if "-" in product_id else f"{product_id}-1"
-        url = f"https://www.brickeconomy.com/set/{set_num}/"
-        
-        response = await page.goto(url, wait_until="domcontentloaded")
-        if response and response.status == 404:
-            print(f"Set {product_id} not found in BrickEconomy")
-            return None
-            
-        # Add a random delay to prevent rate limits and wait for any anti-bot
-        await asyncio.sleep(random.uniform(2.0, 4.0))
-        
-        html = await page.content()
-        from bs4 import BeautifulSoup
-        import re
-        soup = BeautifulSoup(html, 'html.parser')
-        
-        retail_price_val = None
-        value_val = None
-        
-        for div in soup.find_all('div', class_='row'):
-            cols = div.find_all('div')
-            if len(cols) >= 2:
-                lbl = cols[0].get_text(strip=True)
-                val = cols[1].get_text(separator=' ', strip=True)
-                if lbl == "Retail price":
-                    cleaned_price = re.sub(r'[^\d.]', '', val)
-                    if cleaned_price:
-                        retail_price_val = float(cleaned_price)
-                elif lbl == "Value":
-                    cleaned_value = re.sub(r'[^\d.]', '', val)
-                    if cleaned_value:
-                        value_val = float(cleaned_value)
-        
-        # Prefer 'Value' (market price), fallback to 'Retail price'
-        final_price = value_val if value_val is not None else retail_price_val
-        
-        if final_price is not None:
-            print(f"Success! {product_id} price: {final_price} (Value: {value_val}, Retail: {retail_price_val})")
-            return {"product_id": product_id, "current_price": final_price}
-        else:
-            print(f"Could not find any price for {product_id}")
-            return None
-            
-    except Exception as e:
-        print(f"Error scraping {product_id}: {e}")
-        return None
-
 async def main():
-    parser = argparse.ArgumentParser(description="Lego Scraper")
+    parser = argparse.ArgumentParser(description="Lego Scraper Worker")
     parser.add_argument("--product-id", type=str, help="Product ID to scrape")
+    parser.add_argument(
+        "--strategy", 
+        type=str, 
+        choices=["full", "price_only"], 
+        default="full",
+        help="Which scraping strategy to use"
+    )
     args = parser.parse_args()
 
-    # Trigger doesn't strictly need the API key for internal users but it's good practice.
     if not API_KEY:
         print("WARNING: SCRAPER_API_KEY is not set. Webhooks might fail if API requires it.")
 
-    sets_to_scrape = []
-    if args.product_id:
-        sets_to_scrape = [{"product_id": args.product_id, "status": "IN_STOCK"}]
+    # 1. Instantiate the chosen strategy
+    if args.strategy == "full":
+        strategy = FullDataScrapeStrategy()
+    elif args.strategy == "price_only":
+        strategy = PriceOnlyScrapeStrategy()
     else:
-        sets_to_scrape = await get_sets_to_scrape()
-        
-    if not sets_to_scrape:
-        print("No sets found to scrape.")
-        return
+        # Fallback theoretically impossible due to argparse choices
+        strategy = FullDataScrapeStrategy()
 
-    results = []
-    async with async_playwright() as p:
-        browser = await p.chromium.launch(headless=True)
-        page = await browser.new_page()
-        
-        # Iterate sequentially to prevent memory saturation and rate limits
-        for lego_set in sets_to_scrape:
-            if lego_set.get("status") == "IN_STOCK" or lego_set.get("status") is None:
-                result = await scrape_lego_price(page, lego_set["product_id"])
-                if result:
-                    results.append(result)
-                    
-        await browser.close()
-        
-    if results:
-        print(f"Sending {len(results)} scraped prices back to API...")
-        headers = {"X-Scraper-Api-Key": API_KEY, "Content-Type": "application/json"}
-        try:
-            res = requests.post(
-                f"{API_BASE_URL}/scraper/webhook",
-                json={"prices": results},
-                headers=headers
-            )
-            res.raise_for_status()
-            print("Webhook sent successfully:", res.json())
-        except Exception as e:
-            print(f"Failed to send webhook: {e}")
+    print(f"Initialized with strategy: {strategy.__class__.__name__}")
+
+    # 2. Instantiate the orchestrator with the strategy
+    orchestrator = ScraperOrchestrator(
+        strategy=strategy,
+        api_base_url=API_BASE_URL,
+        api_key=API_KEY
+    )
+
+    # 3. Execute
+    await orchestrator.run(product_id=args.product_id)
 
 if __name__ == "__main__":
     asyncio.run(main())

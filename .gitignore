@@ -78,5 +78,5 @@ Thumbs.db
 curl_out.txt
 brick_dump.html
 test_api.py
-test_dump.py
 parse_html.py
+test_dump.py
