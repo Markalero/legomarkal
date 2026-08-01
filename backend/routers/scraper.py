@@ -101,7 +101,10 @@ def run_scraper_task(product_id: str = None):
     cmd = [sys.executable, scraper_path]
     if product_id:
         cmd.extend(["--product-id", product_id])
-    subprocess.run(cmd, capture_output=True, text=True)
+    result = subprocess.run(cmd, capture_output=True, text=True)
+    print(f"[SCRAPER TASK] STDOUT: {result.stdout}")
+    if result.stderr:
+        print(f"[SCRAPER TASK] STDERR: {result.stderr}", file=sys.stderr)
 
 @router.post("/trigger")
 def trigger_scraper(background_tasks: BackgroundTasks, api_key_header: str = Security(api_key_header)):
