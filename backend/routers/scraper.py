@@ -5,6 +5,7 @@ from typing import List
 from pydantic import BaseModel
 import os
 import models, database
+from typing import List, Optional
 
 router = APIRouter(
     prefix="/scraper",
@@ -22,7 +23,9 @@ def get_api_key(api_key_header: str = Security(api_key_header)):
 
 class ScrapedPrice(BaseModel):
     product_id: str
-    current_price: float
+    current_price: Optional[float] = None
+    used_price: Optional[float] = None
+    year_eol: Optional[str] = None
 
 class WebhookPayload(BaseModel):
     prices: List[ScrapedPrice]
@@ -46,10 +49,24 @@ def receive_scraped_prices(payload: WebhookPayload, db: Session = Depends(databa
     updated_count = 0
     
     for db_set in db_sets:
-        new_price = prices_map.get(db_set.product_id)
-        if new_price is not None:
-            # Update current price
-            db_set.current_price = new_price
+        item = next((i for i in payload.prices if i.product_id == db_set.product_id), None)
+        if not item: continue
+        
+        new_price = item.current_price
+        new_used_price = item.used_price
+        new_eol = item.year_eol
+        
+        updated = False
+        if new_eol and db_set.year_eol != new_eol:
+            db_set.year_eol = new_eol
+            updated = True
+            
+        if new_price is not None or new_used_price is not None:
+            if new_price is not None:
+                db_set.current_price = new_price
+            if new_used_price is not None:
+                db_set.current_used_price = new_used_price
+            updated = True
             
             # Record price history if not already recorded today
             # Cast recorded_at to DATE for safe comparison
@@ -59,9 +76,17 @@ def receive_scraped_prices(payload: WebhookPayload, db: Session = Depends(databa
             ).first()
             
             if not history_today:
-                new_history = models.PriceHistory(lego_set_id=db_set.id, price=new_price)
+                new_history = models.PriceHistory(
+                    lego_set_id=db_set.id, 
+                    price=new_price if new_price is not None else db_set.current_price,
+                    used_price=new_used_price
+                )
                 db.add(new_history)
+            else:
+                if new_price is not None: history_today.price = new_price
+                if new_used_price is not None: history_today.used_price = new_used_price
                 
+        if updated:
             updated_count += 1
             
     db.commit()
@@ -89,5 +114,15 @@ def get_scraper_status(db: Session = Depends(database.get_db)):
         last_run = db.query(func.max(models.PriceHistory.recorded_at)).scalar()
         return {"last_run": last_run.isoformat() if last_run else None}
     except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.delete("/history")
+def reset_price_history(db: Session = Depends(database.get_db)):
+    try:
+        deleted = db.query(models.PriceHistory).delete()
+        db.commit()
+        return {"message": f"Historial de precios reseteado. {deleted} registros eliminados."}
+    except Exception as e:
+        db.rollback()
         raise HTTPException(status_code=500, detail=str(e))
 

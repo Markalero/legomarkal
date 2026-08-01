@@ -27,8 +27,11 @@ export default async function SetDetailsPage({ params }: { params: { id: string 
     notFound();
   }
 
-  const roi = set.current_price && set.buy_price 
-    ? ((set.current_price - set.buy_price) / set.buy_price) * 100 
+  const isUsed = set.condition !== "MISB";
+  const marketValue = isUsed ? (set.current_used_price || set.current_price) : set.current_price;
+
+  const roi = marketValue && set.buy_price 
+    ? ((marketValue - set.buy_price) / set.buy_price) * 100 
     : 0;
   const hasProfit = roi >= 0;
 
@@ -122,7 +125,7 @@ export default async function SetDetailsPage({ params }: { params: { id: string 
                 <p className="text-sm font-medium text-muted-foreground mb-1">Valor de Mercado</p>
                 <div className="flex items-baseline gap-2">
                   <div className={`text-3xl font-bold ${hasProfit ? 'text-success' : 'text-destructive'}`}>
-                    {set.current_price ? `€${set.current_price.toFixed(2)}` : "-"}
+                    {marketValue ? `€${marketValue.toFixed(2)}` : "-"}
                   </div>
                   <span className={`text-sm font-medium ${hasProfit ? 'text-success/80' : 'text-destructive/80'}`}>
                     {hasProfit ? '+' : ''}{roi.toFixed(1)}%
@@ -139,7 +142,7 @@ export default async function SetDetailsPage({ params }: { params: { id: string 
               </CardTitle>
               <CardDescription>Evolución del valor de mercado de este set.</CardDescription>
             </CardHeader>
-            <SetHistoryChart data={set.price_history || []} />
+            <SetHistoryChart data={set.price_history || []} condition={set.condition} />
           </Card>
 
           {set.sales && set.sales.length > 0 && (

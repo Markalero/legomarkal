@@ -8,7 +8,7 @@ from strategies.base import LegoScraperStrategy
 
 # Import from backend since sys.path is updated in main.py
 try:
-    from price_utils import extract_brickeconomy_prices
+    from price_utils import extract_brickeconomy_data
 except ImportError:
     pass # Will be handled if not injected properly, but we trust main.py does it.
 
@@ -34,26 +34,23 @@ class FullDataScrapeStrategy(LegoScraperStrategy):
             
             html = await page.content()
             
-            # Extract price
-            retail_price_val, value_val = extract_brickeconomy_prices(html)
+            # Extract all data
+            data = extract_brickeconomy_data(html)
             
-            # Prefer 'Value' (market price), fallback to 'Retail price'
-            final_price = value_val if value_val is not None else retail_price_val
+            final_price = data.get("current_price")
+            used_price = data.get("used_price")
+            year_eol = data.get("year_eol")
             
-            # Here we could also parse `html` with BeautifulSoup to get name, images, etc.
-            # soup = BeautifulSoup(html, 'html.parser')
-            # name_elem = soup.find('h1')
-            # name = name_elem.text.strip() if name_elem else "Unknown"
-            
-            if final_price is not None:
-                print(f"[FullDataStrategy] Success! {product_id} price: {final_price}")
+            if final_price is not None or year_eol is not None or used_price is not None:
+                print(f"[FullDataStrategy] Success! {product_id} price: {final_price}, used: {used_price}, EOL: {year_eol}")
                 return {
                     "product_id": product_id,
                     "current_price": final_price,
-                    # "name": name,
+                    "used_price": used_price,
+                    "year_eol": year_eol
                 }
             else:
-                print(f"[FullDataStrategy] Could not find any price for {product_id}")
+                print(f"[FullDataStrategy] Could not find any price or status for {product_id}")
                 return None
                 
         except Exception as e:

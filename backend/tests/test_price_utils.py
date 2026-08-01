@@ -11,12 +11,15 @@ def test_extract_brickeconomy_prices_prefers_new_sealed_value():
     html = """
     <html>
       <body>
-        <div class="row"><div>Retail price</div><div>€99,99</div></div>
-        <div class="row"><div>Value</div><div>abierto €89,99</div></div>
-        <section>
-          <h3>Nuevo/Sellado</h3>
-          <p>Valor 131,99 €</p>
-        </section>
+        <div class="rowlist">
+          <div class="col-xs-5">Retail price</div><div class="col-xs-7">€99,99</div>
+        </div>
+        <div class="rowlist">
+          <div class="col-xs-5">Value</div><div class="col-xs-7">131,99 €</div>
+        </div>
+        <div class="rowlist">
+          <div class="col-xs-5">Value</div><div class="col-xs-7">89,99 €</div>
+        </div>
       </body>
     </html>
     """

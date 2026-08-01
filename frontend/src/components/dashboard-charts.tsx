@@ -98,7 +98,7 @@ export function PortfolioHistoryChart({ data }: { data: ChartDataPoint[] }) {
     const { cx, cy, payload } = props;
     const isProfitable = payload.value >= (payload.investment || 0);
     const color = isProfitable ? '#22c55e' : '#ef4444';
-    return <circle key={`active-dot-${cx}-${cy}`} cx={cx} cy={cy} r={6} fill={color} stroke="white" strokeWidth={2} />;
+    return <circle key={`active-dot-${cx}-${cy}`} cx={cx} cy={cy} r={6} fill={color} stroke="hsl(var(--background))" strokeWidth={2} />;
   };
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -111,8 +111,8 @@ export function PortfolioHistoryChart({ data }: { data: ChartDataPoint[] }) {
       const valColor = isProfitable ? '#22c55e' : '#ef4444';
 
       return (
-        <div className="bg-black/90 border border-white/10 rounded-lg p-3 text-sm shadow-xl min-w-[200px]">
-          <p className="text-[#a1a1aa] mb-3 font-medium">{label}</p>
+        <div className="bg-background border border-border rounded-lg p-3 text-sm shadow-xl min-w-[200px]">
+          <p className="text-muted-foreground mb-3 font-medium">{label}</p>
           <div className="flex flex-col gap-2">
             <div className="flex items-center justify-between gap-4">
               <span className="flex items-center gap-2">
@@ -150,7 +150,7 @@ export function PortfolioHistoryChart({ data }: { data: ChartDataPoint[] }) {
                 {stops}
               </linearGradient>
             </defs>
-            <CartesianGrid strokeDasharray="3 3" opacity={0.1} />
+            <CartesianGrid strokeDasharray="3 3" stroke="#888888" strokeOpacity={0.2} vertical={false} />
             <XAxis dataKey="displayDate" stroke="#888888" fontSize={12} tickLine={false} axisLine={false} />
             <YAxis 
               stroke="#888888" 

@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
-from sqlalchemy import func
+from sqlalchemy import func, case
 from datetime import datetime, timedelta, timezone
 import schemas, models, database
 
@@ -15,11 +15,14 @@ def get_dashboard_metrics(db: Session = Depends(database.get_db)):
     in_stock_sets = db.query(models.LegoSet).filter(models.LegoSet.status == models.SetStatus.IN_STOCK).all()
     total_investment = sum(s.buy_price * s.quantity for s in in_stock_sets)
     
-    # Current value (sum of current_price or msrp or buy_price for IN_STOCK items)
+    # Current value
     current_value = 0
     sets_in_stock = 0
     for s in in_stock_sets:
-        price = s.current_price or s.msrp or s.buy_price
+        if s.condition != models.SetCondition.MISB:
+            price = s.current_used_price or s.current_price or s.msrp or s.buy_price
+        else:
+            price = s.current_price or s.msrp or s.buy_price
         current_value += price * s.quantity
         sets_in_stock += s.quantity
         
@@ -86,7 +89,12 @@ def get_portfolio_history(db: Session = Depends(database.get_db)):
     
     history_records = db.query(
         func.date(models.PriceHistory.recorded_at).label('date'),
-        func.sum(models.PriceHistory.price * models.LegoSet.quantity).label('total_value')
+        func.sum(
+            case(
+                (models.LegoSet.condition != models.SetCondition.MISB, func.coalesce(models.PriceHistory.used_price, models.PriceHistory.price)),
+                else_=models.PriceHistory.price
+            ) * models.LegoSet.quantity
+        ).label('total_value')
     ).join(models.LegoSet, models.PriceHistory.lego_set_id == models.LegoSet.id)\
      .group_by(func.date(models.PriceHistory.recorded_at))\
      .order_by(func.date(models.PriceHistory.recorded_at)).all()
@@ -151,7 +159,11 @@ def get_top_performers(db: Session = Depends(database.get_db)):
     
     performers = []
     for s in in_stock_sets:
-        price = s.current_price or s.msrp or s.buy_price
+        if s.condition != models.SetCondition.MISB:
+            price = s.current_used_price or s.current_price or s.msrp or s.buy_price
+        else:
+            price = s.current_price or s.msrp or s.buy_price
+            
         if s.buy_price > 0:
             roi = ((price - s.buy_price) / s.buy_price) * 100
             performers.append({

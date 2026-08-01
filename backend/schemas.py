@@ -6,6 +6,7 @@ from models import SetStatus, SetCondition
 # --- Price History Schemas ---
 class PriceHistoryBase(BaseModel):
     price: float
+    used_price: Optional[float] = None
 
 class PriceHistory(PriceHistoryBase):
     id: int
@@ -45,6 +46,7 @@ class LegoSetBase(BaseModel):
     buy_price: float
     msrp: Optional[float] = None
     current_price: Optional[float] = None
+    current_used_price: Optional[float] = None
     target_price: Optional[float] = None
     year_eol: Optional[str] = None
     quantity: int = 1

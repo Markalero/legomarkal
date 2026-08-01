@@ -35,3 +35,11 @@ export async function getTopPerformers() {
   if (!res.ok) throw new Error('Failed to fetch top performers');
   return res.json();
 }
+
+export async function resetPriceHistory() {
+  const res = await fetch(`${API_URL}/scraper/history`, {
+    method: 'DELETE',
+  });
+  if (!res.ok) throw new Error('Failed to reset price history');
+  return res.json();
+}

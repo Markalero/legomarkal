@@ -23,7 +23,8 @@ class LegoSet(Base):
     image_url = Column(String, nullable=True) # Fetched from Rebrickable API
     buy_price = Column(Float, nullable=False)
     msrp = Column(Float, nullable=True)
-    current_price = Column(Float, nullable=True) # Fetched from Scraper
+    current_price = Column(Float, nullable=True) # Fetched from Scraper (New)
+    current_used_price = Column(Float, nullable=True) # Fetched from Scraper (Used)
     target_price = Column(Float, nullable=True) # For market alerts
     year_eol = Column(String, nullable=True)
     quantity = Column(Integer, default=1)
@@ -53,7 +54,8 @@ class PriceHistory(Base):
     
     id = Column(Integer, primary_key=True, index=True)
     lego_set_id = Column(Integer, ForeignKey("lego_sets.id"), nullable=False)
-    price = Column(Float, nullable=False)
+    price = Column(Float, nullable=False) # New price
+    used_price = Column(Float, nullable=True) # Used price
     recorded_at = Column(DateTime(timezone=True), server_default=func.now())
     
     lego_set = relationship("LegoSet", back_populates="price_history")

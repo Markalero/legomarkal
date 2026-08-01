@@ -58,6 +58,19 @@ export default function SettingsPage() {
     }
   };
 
+  const handleResetHistory = async () => {
+    if (!confirm("¿Estás seguro de que deseas borrar todo el historial de precios? Esto no se puede deshacer.")) return;
+    
+    try {
+      const { resetPriceHistory } = await import('@/lib/api');
+      const res = await resetPriceHistory();
+      alert(res.message || "Historial de precios reseteado correctamente.");
+    } catch (error) {
+      console.error(error);
+      alert("Error al resetear el historial de precios.");
+    }
+  };
+
   return (
     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-700">
       <div>
@@ -111,6 +124,17 @@ export default function SettingsPage() {
             <span className="text-xs text-muted-foreground">
               Última ejecución: {lastScrape ? lastScrape : "Nunca"}
             </span>
+          </div>
+          <div className="mt-4 pt-4 border-t">
+            <button 
+              onClick={handleResetHistory}
+              className="px-4 py-2 bg-destructive text-destructive-foreground rounded-md text-sm font-medium hover:bg-destructive/90 transition-colors"
+            >
+              Limpiar histórico de precios
+            </button>
+            <p className="text-xs text-muted-foreground mt-2">
+              Utiliza esta opción si los datos de precios muestran valores erróneos.
+            </p>
           </div>
         </div>
 
