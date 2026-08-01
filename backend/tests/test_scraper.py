@@ -21,7 +21,9 @@ def test_webhook_success(client: TestClient):
         "prices": [
             {
                 "product_id": "80808",
-                "current_price": 25.50
+                "current_price": 25.50,
+                "used_price": 18.00,
+                "year_eol": "2025"
             }
         ]
     }
@@ -36,3 +38,18 @@ def test_webhook_success(client: TestClient):
     # Verify set price was updated
     get_resp = client.get(f"/api/sets/{set_id}")
     assert get_resp.json()["current_price"] == 25.50
+    assert get_resp.json()["current_used_price"] == 18.00
+    assert get_resp.json()["year_eol"] == "2025"
+
+from unittest.mock import patch
+def test_trigger_scraper(client: TestClient):
+    with patch("routers.scraper.subprocess.run") as mock_run:
+        response = client.post("/api/scraper/trigger")
+        assert response.status_code == 200
+        assert "Scraper iniciado" in response.json()["message"]
+        
+        # Verify the background task actually called subprocess
+        # BackgroundTasks run synchronously in TestClient, so mock_run should be called
+        assert mock_run.called
+        cmd_args = mock_run.call_args[0][0]
+        assert "main.py" in cmd_args[1]

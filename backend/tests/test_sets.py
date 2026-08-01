@@ -1,5 +1,7 @@
 from fastapi.testclient import TestClient
 
+from unittest.mock import patch
+
 def test_create_set(client: TestClient):
     payload = {
         "product_id": "75192",
@@ -10,12 +12,19 @@ def test_create_set(client: TestClient):
         "condition": "MISB",
         "status": "IN_STOCK"
     }
-    response = client.post("/api/sets/", json=payload)
-    assert response.status_code == 200, response.text
-    data = response.json()
-    assert data["product_id"] == "75192"
-    assert data["name"] == "Millennium Falcon"
-    assert "id" in data
+    with patch("routers.scraper.subprocess.run") as mock_run:
+        response = client.post("/api/sets/", json=payload)
+        assert response.status_code == 200, response.text
+        data = response.json()
+        assert data["product_id"] == "75192"
+        assert data["name"] == "Millennium Falcon"
+        assert "id" in data
+        
+        # Verify the background task for scraping this specific set was enqueued and executed
+        assert mock_run.called
+        cmd_args = mock_run.call_args[0][0]
+        assert "--product-id" in cmd_args
+        assert "75192" in cmd_args
 
 def test_get_sets(client: TestClient):
     # Setup test set
