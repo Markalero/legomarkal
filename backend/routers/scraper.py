@@ -34,8 +34,7 @@ from datetime import datetime, timezone
 from sqlalchemy.sql import func
 
 @router.post("/webhook", dependencies=[Depends(get_api_key)])
-def receive_scraped_prices(payload: WebhookPayload, db: Session = Depends(database.get_db)):
-def scraper_webhook(payload: schemas.WebhookPayload, db: Session = Depends(database.get_db)):
+def scraper_webhook(payload: WebhookPayload, db: Session = Depends(database.get_db)):
     updated_count = 0
     today_date = datetime.now(timezone.utc).date()
     
