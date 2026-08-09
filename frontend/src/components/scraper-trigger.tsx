@@ -18,7 +18,7 @@ export function ScraperTrigger() {
       let initialStatusRes;
       try {
         initialStatusRes = await fetch(`${API_URL}/scraper/status`, { cache: 'no-store' });
-      } catch (e) {
+      } catch {
         // Ignorar error inicial
       }
       const initialStatus = initialStatusRes?.ok ? await initialStatusRes.json() : { last_run: null };
@@ -50,7 +50,7 @@ export function ScraperTrigger() {
               router.refresh();
             }
           }
-        } catch (e) {
+        } catch {
           // Keep trying if network briefly drops
         }
       }, 3000);
