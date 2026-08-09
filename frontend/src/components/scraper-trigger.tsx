@@ -17,7 +17,7 @@ export function ScraperTrigger() {
       // 1. Get current status to know the "last_run" timestamp before scraping
       let initialStatusRes;
       try {
-        initialStatusRes = await fetch(`${API_URL}/scraper/status`);
+        initialStatusRes = await fetch(`${API_URL}/scraper/status`, { cache: 'no-store' });
       } catch (e) {
         // Ignorar error inicial
       }
@@ -38,7 +38,7 @@ export function ScraperTrigger() {
       // 3. Poll for status change every 3 seconds
       const pollInterval = setInterval(async () => {
         try {
-          const statusRes = await fetch(`${API_URL}/scraper/status`);
+          const statusRes = await fetch(`${API_URL}/scraper/status`, { cache: 'no-store' });
           if (statusRes.ok) {
             const status = await statusRes.json();
             if (status.last_run !== initialLastRun) {

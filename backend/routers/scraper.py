@@ -102,6 +102,9 @@ def run_scraper_task(product_id: str = None):
     if product_id:
         cmd.extend(["--product-id", product_id])
     result = subprocess.run(cmd, capture_output=True, text=True)
+    with open("scraper_debug.log", "w", encoding="utf-8") as f:
+        f.write(f"[SCRAPER TASK] STDOUT:\n{result.stdout}\n")
+        f.write(f"[SCRAPER TASK] STDERR:\n{result.stderr}\n")
     print(f"[SCRAPER TASK] STDOUT: {result.stdout}")
     if result.stderr:
         print(f"[SCRAPER TASK] STDERR: {result.stderr}", file=sys.stderr)

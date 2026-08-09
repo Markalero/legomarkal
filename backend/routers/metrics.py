@@ -160,14 +160,10 @@ def get_top_performers(db: Session = Depends(database.get_db)):
     performers = []
     for s in in_stock_sets:
         if s.condition != models.SetCondition.MISB:
-            market_price = s.current_used_price or s.current_price
+            price = s.current_used_price or s.current_price or s.buy_price
         else:
-            market_price = s.current_price
+            price = s.current_price or s.buy_price
             
-        if market_price is None:
-            continue
-            
-        price = market_price
         if s.buy_price > 0:
             roi = ((price - s.buy_price) / s.buy_price) * 100
             performers.append({
@@ -179,7 +175,6 @@ def get_top_performers(db: Session = Depends(database.get_db)):
                 "current_price": price,
                 "roi_percentage": round(roi, 2)
             })
-            
             
     # Sort by roi_percentage descending
     performers.sort(key=lambda x: x["roi_percentage"], reverse=True)
