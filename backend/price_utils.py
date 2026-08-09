@@ -69,7 +69,7 @@ def extract_brickeconomy_data(html: str) -> dict:
         
         if "retail price" in label and not retail_price:
             retail_price = normalize_price_number(val)
-        elif ("market price" in label or "value" in label or "new/sealed" in label):
+        elif ("market price" in label or "value" in label or "new/sealed" in label) and not any(x in label for x in ["part", "minifig", "piece"]):
             # The first value is usually the new price, the second is the used price
             price_val = normalize_price_number(val)
             if price_val is not None:
