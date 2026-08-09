@@ -88,24 +88,42 @@ import sys
 import os
 from fastapi import BackgroundTasks
 
+# Store the last run logs in memory for debugging
+LAST_SCRAPER_LOGS = {"stdout": "Scraper hasn't run yet.", "stderr": "", "status": "idle"}
+
 def run_scraper_task(product_id: str = None):
-    scraper_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "scraper", "main.py")
-    cmd = [sys.executable, scraper_path]
-    if product_id:
-        cmd.extend(["--product-id", product_id])
-        
-    env = os.environ.copy()
+    global LAST_SCRAPER_LOGS
+    LAST_SCRAPER_LOGS["status"] = "running"
+    LAST_SCRAPER_LOGS["stdout"] = "Running..."
+    LAST_SCRAPER_LOGS["stderr"] = ""
     
-    # Render assigns a dynamic PORT. We must use this port to communicate locally.
-    port = os.environ.get("PORT", "8000")
-    env["API_BASE_URL"] = f"http://127.0.0.1:{port}/api"
+    try:
+        scraper_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "scraper", "main.py")
+        cmd = [sys.executable, scraper_path]
+        if product_id:
+            cmd.extend(["--product-id", product_id])
+            
+        env = os.environ.copy()
+        port = os.environ.get("PORT", "8000")
+        env["API_BASE_URL"] = f"http://127.0.0.1:{port}/api"
+            
+        result = subprocess.run(cmd, capture_output=True, text=True, env=env)
         
-    result = subprocess.run(cmd, capture_output=True, text=True, env=env)
-    
-    print(f"[SCRAPER TASK] Using API_BASE_URL: {env.get('API_BASE_URL')}")
-    print(f"[SCRAPER TASK] STDOUT: {result.stdout}")
-    if result.stderr:
-        print(f"[SCRAPER TASK] STDERR: {result.stderr}", file=sys.stderr)
+        LAST_SCRAPER_LOGS["stdout"] = result.stdout
+        LAST_SCRAPER_LOGS["stderr"] = result.stderr
+        LAST_SCRAPER_LOGS["status"] = "finished"
+        
+        print(f"[SCRAPER TASK] STDOUT: {result.stdout}")
+        if result.stderr:
+            print(f"[SCRAPER TASK] STDERR: {result.stderr}", file=sys.stderr)
+            
+    except Exception as e:
+        LAST_SCRAPER_LOGS["stderr"] = f"Python Execution Exception: {str(e)}"
+        LAST_SCRAPER_LOGS["status"] = "error"
+
+@router.get("/logs")
+def get_scraper_logs():
+    return LAST_SCRAPER_LOGS
 
 @router.post("/trigger")
 def trigger_scraper(background_tasks: BackgroundTasks, api_key_header: str = Security(api_key_header)):

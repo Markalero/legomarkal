@@ -57,6 +57,17 @@ export function ScraperTrigger() {
             const status = await statusRes.json();
             console.log(`[ScraperTrigger] Polling last_run actual: ${status.last_run}`);
             
+            // Debug the backend logs directly in the browser console
+            try {
+              const logsRes = await fetch(`${API_URL}/scraper/logs`, { cache: 'no-store' });
+              if (logsRes.ok) {
+                const logs = await logsRes.json();
+                console.log(`[ScraperTrigger] Backend Logs (status: ${logs.status}):\nSTDOUT: ${logs.stdout}\nSTDERR: ${logs.stderr}`);
+              }
+            } catch (logErr) {
+              // Ignore log fetch errors
+            }
+            
             if (status.last_run !== initialLastRun) {
               console.log(`[ScraperTrigger] ¡El estado ha cambiado! Scraper finalizado.`);
               clearInterval(pollInterval);
