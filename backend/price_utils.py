@@ -45,48 +45,101 @@ def normalize_price_number(raw_price: str | None) -> Optional[float]:
         return None
 
 
+def _clean_val_text(val_div) -> str:
+    """Extrae texto de un div de valor eliminando scripts (sparklines) para evitar contaminación."""
+    for script in val_div.find_all('script'):
+        script.decompose()
+    return val_div.get_text(" ", strip=True)
+
+
 def extract_brickeconomy_data(html: str) -> dict:
-    """Extrae precio retail, precio de mercado, precio usado y estado EOL desde el HTML de BrickEconomy iterando sobre la tabla de propiedades."""
+    """Extrae precio retail, precio de mercado nuevo, precio usado y estado EOL
+    desde el HTML de BrickEconomy, centrandose en la seccion 'Set Pricing'."""
     soup = BeautifulSoup(html, "html.parser")
-    
+
     retail_price = None
     market_price = None
     used_price = None
     year_eol = None
-    
-    value_count = 0
-    
-    rowlists = soup.find_all('div', class_='rowlist')
-    for row in rowlists:
+
+    # --- 1. Extraer precios SOLO de la seccion "Set Pricing" ---
+    pricing_section = soup.find('div', class_='setpricing')
+    if pricing_section:
+        body = pricing_section.find('div', class_='side-box-body')
+        if body:
+            # Rastrear sub-seccion actual: None → antes de cabeceras,
+            # 'new' → New/Sealed, 'used' → Used
+            current_subsection = None
+
+            for el in body.find_all('div', recursive=False):
+                classes = el.get('class', [])
+
+                # Detectar cabeceras de sub-seccion (New/Sealed, Used)
+                if 'semibold' in classes:
+                    header_text = el.get_text(" ", strip=True).lower()
+                    if 'new' in header_text or 'sealed' in header_text:
+                        current_subsection = 'new'
+                    elif 'used' in header_text:
+                        current_subsection = 'used'
+                    continue
+
+                # Solo procesar filas de tipo rowlist
+                if 'rowlist' not in classes:
+                    continue
+
+                label_div = el.find('div', class_='col-xs-5')
+                val_div = el.find('div', class_='col-xs-7')
+
+                if not label_div or not val_div:
+                    continue
+
+                label = label_div.get_text(" ", strip=True).lower()
+                val = _clean_val_text(val_div)
+
+                if "retail price" in label and retail_price is None:
+                    retail_price = normalize_price_number(val)
+                elif label == "value":
+                    price_val = normalize_price_number(val)
+                    if price_val is not None:
+                        if current_subsection == 'new' and market_price is None:
+                            market_price = price_val
+                        elif current_subsection == 'used' and used_price is None:
+                            used_price = price_val
+
+    # --- 2. Fallback: si no se encontro la seccion setpricing, buscar globalmente ---
+    if market_price is None and used_price is None and retail_price is None:
+        for row in soup.find_all('div', class_='rowlist'):
+            label_div = row.find('div', class_='col-xs-5')
+            val_div = row.find('div', class_='col-xs-7')
+            if not label_div or not val_div:
+                continue
+            label = label_div.get_text(" ", strip=True).lower()
+            val = _clean_val_text(val_div)
+
+            if "retail price" in label and retail_price is None:
+                retail_price = normalize_price_number(val)
+            elif ("market price" in label or "new/sealed" in label) and market_price is None:
+                market_price = normalize_price_number(val)
+            elif "used" in label and "price" in label and used_price is None:
+                used_price = normalize_price_number(val)
+
+    # --- 3. Extraer estado EOL (puede estar fuera de Set Pricing) ---
+    for row in soup.find_all('div', class_='rowlist'):
         label_div = row.find('div', class_='col-xs-5')
         val_div = row.find('div', class_='col-xs-7')
-        
         if not label_div or not val_div:
             continue
-            
         label = label_div.get_text(" ", strip=True).lower()
         val = val_div.get_text(" ", strip=True)
-        
-        if "retail price" in label and not retail_price:
-            retail_price = normalize_price_number(val)
-        elif ("market price" in label or "value" in label or "new/sealed" in label):
-            # The first value is usually the new price, the second is the used price
-            price_val = normalize_price_number(val)
-            if price_val is not None:
-                if market_price is None:
-                    market_price = price_val
-                elif used_price is None and price_val != market_price:
-                    used_price = price_val
-        elif "used" in label and "price" in label and not used_price:
-            used_price = normalize_price_number(val)
-        elif label == "retired":
+
+        if label == "retired":
             match = re.search(r"\d{4}", val)
             if match:
                 year_eol = f"Retired ({match.group()})"
         elif "availability" in label and "retired" in val.lower():
             if not year_eol:
                 year_eol = "Retired"
-                
+
     return {
         "retail_price": retail_price,
         "current_price": market_price if market_price is not None else retail_price,
