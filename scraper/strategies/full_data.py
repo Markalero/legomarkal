@@ -1,14 +1,16 @@
 import asyncio
 import random
-import requests
 from typing import Dict, Any, Optional
+from bs4 import BeautifulSoup
+from playwright.async_api import Page
 
 from strategies.base import LegoScraperStrategy
 
+# Import from backend since sys.path is updated in main.py
 try:
     from price_utils import extract_brickeconomy_data
 except ImportError:
-    pass
+    pass # Will be handled if not injected properly, but we trust main.py does it.
 
 class FullDataScrapeStrategy(LegoScraperStrategy):
     """
@@ -16,27 +18,21 @@ class FullDataScrapeStrategy(LegoScraperStrategy):
     from a complex source like BrickEconomy.
     """
     
-    async def scrape(self, product_id: str, session: Any = None) -> Optional[Dict[str, Any]]:
+    async def scrape(self, product_id: str, page: Page) -> Optional[Dict[str, Any]]:
         print(f"[FullDataStrategy] Scraping comprehensive data for product {product_id}...")
         try:
             set_num = product_id if "-" in product_id else f"{product_id}-1"
             url = f"https://www.brickeconomy.com/set/{set_num}/"
             
-            headers = {
-                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-            }
-            
-            # Use asyncio.to_thread to run requests.get synchronously without blocking the event loop
-            response = await asyncio.to_thread(requests.get, url, headers=headers, timeout=15)
-            
-            if response.status_code == 404:
+            response = await page.goto(url, wait_until="domcontentloaded")
+            if response and response.status == 404:
                 print(f"[FullDataStrategy] Set {product_id} not found.")
                 return None
-            elif response.status_code != 200:
-                print(f"[FullDataStrategy] Failed with status {response.status_code} for {product_id}")
-                return None
                 
-            html = response.text
+            # Random delay for anti-bot
+            await asyncio.sleep(random.uniform(2.0, 4.0))
+            
+            html = await page.content()
             
             # Extract all data
             data = extract_brickeconomy_data(html)
