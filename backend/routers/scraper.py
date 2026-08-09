@@ -35,60 +35,51 @@ from sqlalchemy.sql import func
 
 @router.post("/webhook", dependencies=[Depends(get_api_key)])
 def receive_scraped_prices(payload: WebhookPayload, db: Session = Depends(database.get_db)):
-    product_ids = [item.product_id for item in payload.prices]
-    prices_map = {item.product_id: item.current_price for item in payload.prices}
-    
-    # Batch select to prevent N+1 query problem
-    db_sets = db.query(models.LegoSet).filter(
-        models.LegoSet.product_id.in_(product_ids),
-        models.LegoSet.status == models.SetStatus.IN_STOCK
-    ).all()
-    
-    # Ensure idempotency by tracking today's date
-    today_date = datetime.now(timezone.utc).date()
+def scraper_webhook(payload: schemas.WebhookPayload, db: Session = Depends(database.get_db)):
     updated_count = 0
+    today_date = datetime.now(timezone.utc).date()
     
-    for db_set in db_sets:
-        item = next((i for i in payload.prices if i.product_id == db_set.product_id), None)
-        if not item: continue
-        
-        new_price = item.current_price
-        new_used_price = item.used_price
-        new_eol = item.year_eol
-        
-        updated = False
-        if new_eol and db_set.year_eol != new_eol:
-            db_set.year_eol = new_eol
-            updated = True
+    # Regardless of whether we found prices, mark all IN_STOCK sets as updated
+    # so the frontend polling mechanism knows the scraper finished.
+    db.query(models.LegoSet).filter(models.LegoSet.status == "IN_STOCK").update(
+        {"updated_at": func.now()}, synchronize_session=False
+    )
+    
+    for item in payload.prices:
+        db_set = db.query(models.LegoSet).filter(models.LegoSet.product_id == str(item.product_id).split('-')[0]).first()
+        if db_set:
+            new_price = item.current_price
+            new_used_price = item.used_price
+            updated = False
             
-        if new_price is not None or new_used_price is not None:
-            if new_price is not None:
-                db_set.current_price = new_price
-            if new_used_price is not None:
-                db_set.current_used_price = new_used_price
-            updated = True
-            
-            # Record price history if not already recorded today
-            # Cast recorded_at to DATE for safe comparison
-            history_today = db.query(models.PriceHistory).filter(
-                models.PriceHistory.lego_set_id == db_set.id,
-                func.date(models.PriceHistory.recorded_at) == today_date
-            ).first()
-            
-            if not history_today:
-                new_history = models.PriceHistory(
-                    lego_set_id=db_set.id, 
-                    price=new_price if new_price is not None else db_set.current_price,
-                    used_price=new_used_price
-                )
-                db.add(new_history)
-            else:
-                if new_price is not None: history_today.price = new_price
-                if new_used_price is not None: history_today.used_price = new_used_price
+            if new_price is not None or new_used_price is not None:
+                if new_price is not None:
+                    db_set.current_price = new_price
+                if new_used_price is not None:
+                    db_set.current_used_price = new_used_price
+                updated = True
                 
-        if updated:
-            updated_count += 1
-            
+            # Create today's history record only if we have valid prices
+            if updated:
+                history_today = db.query(models.PriceHistory).filter(
+                    models.PriceHistory.lego_set_id == db_set.id,
+                    models.PriceHistory.recorded_at >= today_date
+                ).first()
+                
+                if not history_today:
+                    new_history = models.PriceHistory(
+                        lego_set_id=db_set.id, 
+                        price=new_price if new_price is not None else db_set.current_price,
+                        used_price=new_used_price if new_used_price is not None else db_set.current_used_price
+                    )
+                    db.add(new_history)
+                else:
+                    if new_price is not None: history_today.price = new_price
+                    if new_used_price is not None: history_today.used_price = new_used_price
+                    
+            if updated:
+                updated_count += 1
+                
     db.commit()
     return {"message": f"Successfully updated {updated_count} sets"}
 
@@ -124,7 +115,9 @@ def trigger_scraper(background_tasks: BackgroundTasks, api_key_header: str = Sec
 @router.get("/status")
 def get_scraper_status(db: Session = Depends(database.get_db)):
     try:
-        last_run = db.query(func.max(models.PriceHistory.recorded_at)).scalar()
+        # Use LegoSet.updated_at so the UI can detect when a scraper run finishes
+        # even if no new prices were inserted into PriceHistory.
+        last_run = db.query(func.max(models.LegoSet.updated_at)).scalar()
         return {"last_run": last_run.isoformat() if last_run else None}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
