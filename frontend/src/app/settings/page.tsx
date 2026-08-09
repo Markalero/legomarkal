@@ -2,11 +2,15 @@
 
 import { Download, Upload } from "lucide-react";
 import { useRef, useState, useEffect } from "react";
+import { toast } from "sonner";
+import { useRouter } from "next/navigation";
 
 export default function SettingsPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isImporting, setIsImporting] = useState(false);
+  const [isResetting, setIsResetting] = useState(false);
   const [lastScrape, setLastScrape] = useState<string | null>(null);
+  const router = useRouter();
 
   useEffect(() => {
     fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000/api'}/scraper/status`)
@@ -43,15 +47,19 @@ export default function SettingsPage() {
       });
       
       if (res.ok) {
-        alert("Copia de seguridad restaurada correctamente. Todo tu inventario ha sido actualizado.");
-        window.location.reload();
+        toast.success("Copia de seguridad restaurada", {
+          description: "Todo tu inventario ha sido actualizado correctamente.",
+        });
+        router.refresh();
       } else {
         const err = await res.json();
-        alert(`Error al restaurar: ${err.detail || "Desconocido"}`);
+        toast.error("Error al restaurar", {
+          description: err.detail || "Error desconocido.",
+        });
       }
     } catch (error) {
       console.error(error);
-      alert("Error de conexión al importar.");
+      toast.error("Error de conexión al importar.");
     } finally {
       setIsImporting(false);
       if (fileInputRef.current) fileInputRef.current.value = "";
@@ -59,15 +67,22 @@ export default function SettingsPage() {
   };
 
   const handleResetHistory = async () => {
-    if (!confirm("¿Estás seguro de que deseas borrar todo el historial de precios? Esto no se puede deshacer.")) return;
+    if (!confirm("¿Estás seguro de que deseas borrar todo el historial de precios y resetear los precios actuales? Esto no se puede deshacer.")) return;
     
+    setIsResetting(true);
     try {
       const { resetPriceHistory } = await import('@/lib/api');
       const res = await resetPriceHistory();
-      alert(res.message || "Historial de precios reseteado correctamente.");
+      toast.success("Historial limpiado", {
+        description: res.message || "Historial de precios y precios actuales reseteados correctamente.",
+      });
+      setLastScrape(null);
+      router.refresh();
     } catch (error) {
       console.error(error);
-      alert("Error al resetear el historial de precios.");
+      toast.error("Error al resetear el historial de precios.");
+    } finally {
+      setIsResetting(false);
     }
   };
 
@@ -128,12 +143,13 @@ export default function SettingsPage() {
           <div className="mt-4 pt-4 border-t">
             <button 
               onClick={handleResetHistory}
-              className="px-4 py-2 bg-destructive text-destructive-foreground rounded-md text-sm font-medium hover:bg-destructive/90 transition-colors"
+              disabled={isResetting}
+              className="px-4 py-2 bg-destructive text-destructive-foreground rounded-md text-sm font-medium hover:bg-destructive/90 transition-colors disabled:opacity-50"
             >
-              Limpiar histórico de precios
+              {isResetting ? "Limpiando..." : "Limpiar histórico de precios"}
             </button>
             <p className="text-xs text-muted-foreground mt-2">
-              Utiliza esta opción si los datos de precios muestran valores erróneos.
+              Borra el historial de precios y resetea los precios actuales de todos los sets a su estado inicial.
             </p>
           </div>
         </div>
