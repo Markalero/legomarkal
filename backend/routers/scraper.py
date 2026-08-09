@@ -90,6 +90,31 @@ from fastapi import BackgroundTasks
 # Store the last run logs in memory for debugging
 LAST_SCRAPER_LOGS = {"stdout": "Scraper hasn't run yet.", "stderr": "", "status": "idle"}
 
+def get_scraper_path() -> str:
+    current_file = os.path.abspath(__file__)
+    
+    # Candidate 1: 3 levels up (backend/routers/scraper.py -> root/scraper/main.py)
+    path_3 = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(current_file))), "scraper", "main.py")
+    if os.path.isfile(path_3):
+        return path_3
+
+    # Candidate 2: 2 levels up (routers/scraper.py -> ../scraper/main.py if backend/ is root)
+    path_2 = os.path.join(os.path.dirname(os.path.dirname(current_file)), "scraper", "main.py")
+    if os.path.isfile(path_2):
+        return path_2
+
+    # Candidate 3: relative to Current Working Directory
+    cwd_path = os.path.join(os.getcwd(), "scraper", "main.py")
+    if os.path.isfile(cwd_path):
+        return cwd_path
+
+    # Candidate 4: parent of Current Working Directory
+    parent_cwd = os.path.join(os.path.dirname(os.getcwd()), "scraper", "main.py")
+    if os.path.isfile(parent_cwd):
+        return parent_cwd
+
+    return path_3
+
 def run_scraper_task(product_id: str = None):
     global LAST_SCRAPER_LOGS
     LAST_SCRAPER_LOGS["status"] = "running"
@@ -97,7 +122,7 @@ def run_scraper_task(product_id: str = None):
     LAST_SCRAPER_LOGS["stderr"] = ""
     
     try:
-        scraper_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "scraper", "main.py")
+        scraper_path = get_scraper_path()
         cmd = [sys.executable, scraper_path]
         if product_id:
             cmd.extend(["--product-id", product_id])
@@ -112,6 +137,7 @@ def run_scraper_task(product_id: str = None):
         LAST_SCRAPER_LOGS["stderr"] = result.stderr
         LAST_SCRAPER_LOGS["status"] = "finished"
         
+        print(f"[SCRAPER TASK] Path: {scraper_path}")
         print(f"[SCRAPER TASK] STDOUT: {result.stdout}")
         if result.stderr:
             print(f"[SCRAPER TASK] STDERR: {result.stderr}", file=sys.stderr)
