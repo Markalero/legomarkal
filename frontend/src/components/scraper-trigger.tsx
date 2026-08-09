@@ -64,7 +64,7 @@ export function ScraperTrigger() {
                 const logs = await logsRes.json();
                 console.log(`[ScraperTrigger] Backend Logs (status: ${logs.status}):\nSTDOUT: ${logs.stdout}\nSTDERR: ${logs.stderr}`);
               }
-            } catch (logErr) {
+            } catch {
               // Ignore log fetch errors
             }
             
