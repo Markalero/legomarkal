@@ -94,6 +94,7 @@ def receive_scraped_prices(payload: WebhookPayload, db: Session = Depends(databa
 
 import subprocess
 import sys
+import os
 from fastapi import BackgroundTasks
 
 def run_scraper_task(product_id: str = None):
@@ -101,10 +102,16 @@ def run_scraper_task(product_id: str = None):
     cmd = [sys.executable, scraper_path]
     if product_id:
         cmd.extend(["--product-id", product_id])
-    result = subprocess.run(cmd, capture_output=True, text=True)
-    with open("scraper_debug.log", "w", encoding="utf-8") as f:
-        f.write(f"[SCRAPER TASK] STDOUT:\n{result.stdout}\n")
-        f.write(f"[SCRAPER TASK] STDERR:\n{result.stderr}\n")
+        
+    env = os.environ.copy()
+    
+    # Render assigns a dynamic PORT. We must use this port to communicate locally.
+    port = os.environ.get("PORT", "8000")
+    env["API_BASE_URL"] = f"http://127.0.0.1:{port}/api"
+        
+    result = subprocess.run(cmd, capture_output=True, text=True, env=env)
+    
+    print(f"[SCRAPER TASK] Using API_BASE_URL: {env.get('API_BASE_URL')}")
     print(f"[SCRAPER TASK] STDOUT: {result.stdout}")
     if result.stderr:
         print(f"[SCRAPER TASK] STDERR: {result.stderr}", file=sys.stderr)
