@@ -136,7 +136,7 @@ def _scrape_set_http_fallback(product_id: str) -> dict | None:
 @router.post("/update-prices")
 async def update_prices_inline(db: Session = Depends(database.get_db)):
     """Actualiza precios de todos los sets IN_STOCK scrapeando BrickEconomy.
-    Usa Playwright (Chromium) para evitar bloqueos de Cloudflare y emite progreso SSE."""
+    Usa solicitudes HTTP ultrarrápidas (Session) con fallback a Playwright si fuese necesario."""
     in_stock_sets = db.query(models.LegoSet).filter(
         models.LegoSet.status == models.SetStatus.IN_STOCK
     ).all()
@@ -152,31 +152,16 @@ async def update_prices_inline(db: Session = Depends(database.get_db)):
         updated_count = 0
         total = len(in_stock_sets)
 
-        playwright_available = False
-        browser = None
-        context = None
-        page = None
+        # Crear sesión HTTP persistente con cabeceras de navegador real
+        http_session = http_requests.Session()
+        http_session.headers.update({
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+            "Accept-Language": "es-ES,es;q=0.9,en;q=0.8",
+        })
 
-        try:
-            from playwright.async_api import async_playwright
-            p = await async_playwright().start()
-            browser = await p.chromium.launch(
-                headless=True,
-                args=[
-                    "--no-sandbox",
-                    "--disable-setuid-sandbox",
-                    "--disable-dev-shm-usage",
-                    "--disable-gpu",
-                ]
-            )
-            context = await browser.new_context(
-                user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-            )
-            page = await context.new_page()
-            playwright_available = True
-        except Exception as e:
-            print(f"[UpdatePrices] Playwright launch failed, falling back to HTTP: {e}")
-            playwright_available = False
+        playwright_browser = None
+        playwright_page = None
 
         for idx, db_set in enumerate(in_stock_sets):
             progress = {
@@ -189,21 +174,41 @@ async def update_prices_inline(db: Session = Depends(database.get_db)):
 
             data = None
 
-            if playwright_available and page:
-                try:
-                    set_num = db_set.product_id if "-" in db_set.product_id else f"{db_set.product_id}-1"
-                    url = f"https://www.brickeconomy.com/set/{set_num}/"
-                    resp = await page.goto(url, wait_until="domcontentloaded", timeout=20000)
-                    if resp and resp.status == 200:
-                        html = await page.content()
-                        data = extract_brickeconomy_data(html)
-                except Exception as e:
-                    print(f"[Playwright] Error scraping {db_set.product_id}: {e}")
-                    data = None
+            # 1. Intentar primero con solicitud HTTP rápida (~0.5s)
+            set_num = db_set.product_id if "-" in db_set.product_id else f"{db_set.product_id}-1"
+            url = f"https://www.brickeconomy.com/set/{set_num}/"
+            try:
+                resp = http_session.get(url, timeout=8)
+                if resp.status_code == 200:
+                    data = extract_brickeconomy_data(resp.text)
+            except Exception as e:
+                print(f"[FastHTTP] Error fetching {db_set.product_id}: {e}")
 
-            # Fallback a HTTP si Playwright fallo o no estaba disponible
+            # 2. Fallback a Playwright solo si la peticion HTTP fallo (por ej. captcha/bloqueo)
             if not data:
-                data = _scrape_set_http_fallback(db_set.product_id)
+                if playwright_page is None:
+                    try:
+                        from playwright.async_api import async_playwright
+                        p = await async_playwright().start()
+                        playwright_browser = await p.chromium.launch(
+                            headless=True,
+                            args=["--no-sandbox", "--disable-setuid-sandbox", "--disable-dev-shm-usage", "--disable-gpu"]
+                        )
+                        ctx = await playwright_browser.new_context(
+                            user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+                        )
+                        playwright_page = await ctx.new_page()
+                    except Exception as pe:
+                        print(f"[PlaywrightFallback] Error launching browser: {pe}")
+
+                if playwright_page:
+                    try:
+                        pw_resp = await playwright_page.goto(url, wait_until="domcontentloaded", timeout=12000)
+                        if pw_resp and pw_resp.status == 200:
+                            html = await playwright_page.content()
+                            data = extract_brickeconomy_data(html)
+                    except Exception as pe:
+                        print(f"[PlaywrightFallback] Error scraping {db_set.product_id}: {pe}")
 
             if data:
                 new_price = data.get("current_price")
@@ -249,11 +254,11 @@ async def update_prices_inline(db: Session = Depends(database.get_db)):
             yield f"data: {json.dumps(progress)}\n\n"
 
             if idx < total - 1:
-                await asyncio.sleep(1.5)
+                await asyncio.sleep(0.3)
 
-        if browser:
+        if playwright_browser:
             try:
-                await browser.close()
+                await playwright_browser.close()
             except Exception:
                 pass
 

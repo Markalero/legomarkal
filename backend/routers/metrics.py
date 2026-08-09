@@ -20,9 +20,12 @@ def get_dashboard_metrics(db: Session = Depends(database.get_db)):
     sets_in_stock = 0
     for s in in_stock_sets:
         if s.condition != models.SetCondition.MISB:
-            price = s.current_used_price or s.current_price or s.msrp or s.buy_price
+            market_price = s.current_used_price if s.current_used_price is not None else s.current_price
         else:
-            price = s.current_price or s.msrp or s.buy_price
+            market_price = s.current_price
+
+        # Si hay un precio de mercado escrapeado, usarlo; de lo contrario, usar buy_price (ganancia 0 si se reseteo el historial)
+        price = market_price if market_price is not None else s.buy_price
         current_value += price * s.quantity
         sets_in_stock += s.quantity
         
@@ -160,19 +163,20 @@ def get_top_performers(db: Session = Depends(database.get_db)):
     performers = []
     for s in in_stock_sets:
         if s.condition != models.SetCondition.MISB:
-            price = s.current_used_price or s.current_price or s.msrp or s.buy_price
+            market_price = s.current_used_price if s.current_used_price is not None else s.current_price
         else:
-            price = s.current_price or s.msrp or s.buy_price
+            market_price = s.current_price
             
-        if s.buy_price > 0:
-            roi = ((price - s.buy_price) / s.buy_price) * 100
+        # Solo incluir en Top Performers si realmente existe un precio de mercado escrapeado
+        if market_price is not None and s.buy_price > 0:
+            roi = ((market_price - s.buy_price) / s.buy_price) * 100
             performers.append({
                 "id": s.id,
                 "product_id": s.product_id,
                 "name": s.name,
                 "image_url": s.image_url,
                 "buy_price": s.buy_price,
-                "current_price": price,
+                "current_price": market_price,
                 "roi_percentage": round(roi, 2)
             })
             
