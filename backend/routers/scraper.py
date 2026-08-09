@@ -1,11 +1,19 @@
 from fastapi import APIRouter, Depends, HTTPException, Security
 from fastapi.security.api_key import APIKeyHeader
 from sqlalchemy.orm import Session
-from typing import List
+from typing import List, Optional
 from pydantic import BaseModel
 import os
+import asyncio
+import json
+import time
+from datetime import datetime, timezone
+from sqlalchemy.sql import func
+from fastapi.responses import StreamingResponse
+import requests as http_requests
+
 import models, database
-from typing import List, Optional
+from price_utils import extract_brickeconomy_data
 
 router = APIRouter(
     prefix="/scraper",
@@ -30,20 +38,15 @@ class ScrapedPrice(BaseModel):
 class WebhookPayload(BaseModel):
     prices: List[ScrapedPrice]
 
-from datetime import datetime, timezone
-from sqlalchemy.sql import func
-
 @router.post("/webhook", dependencies=[Depends(get_api_key)])
 def receive_scraped_prices(payload: WebhookPayload, db: Session = Depends(database.get_db)):
     product_ids = [item.product_id for item in payload.prices]
     
-    # Batch select to prevent N+1 query problem
     db_sets = db.query(models.LegoSet).filter(
         models.LegoSet.product_id.in_(product_ids),
         models.LegoSet.status == models.SetStatus.IN_STOCK
     ).all()
     
-    # Ensure idempotency by tracking today's date
     today_date = datetime.now(timezone.utc).date()
     updated_count = 0
     
@@ -67,8 +70,6 @@ def receive_scraped_prices(payload: WebhookPayload, db: Session = Depends(databa
                 db_set.current_used_price = new_used_price
             updated = True
             
-            # Record price history if not already recorded today
-            # Cast recorded_at to DATE for safe comparison
             history_today = db.query(models.PriceHistory).filter(
                 models.PriceHistory.lego_set_id == db_set.id,
                 func.date(models.PriceHistory.recorded_at) == today_date
@@ -110,16 +111,10 @@ def trigger_scraper(background_tasks: BackgroundTasks, api_key_header: str = Sec
     background_tasks.add_task(run_scraper_task)
     return {"message": "Scraper iniciado en segundo plano. Los precios se actualizarán en breve."}
 
-# ─── Scraping ligero inline (sin Playwright) ───────────────────────────
-import requests as http_requests
-import time
-import json
-from fastapi.responses import StreamingResponse
-from price_utils import extract_brickeconomy_data
 
-def _scrape_set_inline(product_id: str) -> dict | None:
-    """Descarga la pagina de BrickEconomy via HTTP y extrae precios.
-    No necesita Playwright, solo requests + BeautifulSoup."""
+# ─── Scraping inline con Playwright (y fallback HTTP) ─────────────────
+
+def _scrape_set_http_fallback(product_id: str) -> dict | None:
     set_num = product_id if "-" in product_id else f"{product_id}-1"
     url = f"https://www.brickeconomy.com/set/{set_num}/"
     headers = {
@@ -128,32 +123,60 @@ def _scrape_set_inline(product_id: str) -> dict | None:
         "Accept-Language": "en-US,en;q=0.5",
     }
     try:
-        resp = http_requests.get(url, headers=headers, timeout=15)
+        resp = http_requests.get(url, headers=headers, timeout=12)
         if resp.status_code == 404:
             return None
         resp.raise_for_status()
-        data = extract_brickeconomy_data(resp.text)
-        return data
+        return extract_brickeconomy_data(resp.text)
     except Exception as e:
-        print(f"[InlineScraper] Error fetching {product_id}: {e}")
+        print(f"[HttpFallback] Error fetching {product_id}: {e}")
         return None
 
+
 @router.post("/update-prices")
-def update_prices_inline(db: Session = Depends(database.get_db)):
-    """Actualiza precios de todos los sets IN_STOCK scrapeando BrickEconomy
-    directamente sin Playwright. Devuelve un stream SSE con el progreso."""
+async def update_prices_inline(db: Session = Depends(database.get_db)):
+    """Actualiza precios de todos los sets IN_STOCK scrapeando BrickEconomy.
+    Usa Playwright (Chromium) para evitar bloqueos de Cloudflare y emite progreso SSE."""
     in_stock_sets = db.query(models.LegoSet).filter(
         models.LegoSet.status == models.SetStatus.IN_STOCK
     ).all()
 
     if not in_stock_sets:
-        return {"message": "No hay sets en stock para actualizar.", "updated": 0, "total": 0}
+        async def empty_gen():
+            yield f"data: {json.dumps({'type': 'done', 'updated': 0, 'total': 0})}\n\n"
+        return StreamingResponse(empty_gen(), media_type="text/event-stream")
 
     today_date = datetime.now(timezone.utc).date()
 
-    def generate():
+    async def generate():
         updated_count = 0
         total = len(in_stock_sets)
+
+        playwright_available = False
+        browser = None
+        context = None
+        page = None
+
+        try:
+            from playwright.async_api import async_playwright
+            p = await async_playwright().start()
+            browser = await p.chromium.launch(
+                headless=True,
+                args=[
+                    "--no-sandbox",
+                    "--disable-setuid-sandbox",
+                    "--disable-dev-shm-usage",
+                    "--disable-gpu",
+                ]
+            )
+            context = await browser.new_context(
+                user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+            )
+            page = await context.new_page()
+            playwright_available = True
+        except Exception as e:
+            print(f"[UpdatePrices] Playwright launch failed, falling back to HTTP: {e}")
+            playwright_available = False
 
         for idx, db_set in enumerate(in_stock_sets):
             progress = {
@@ -164,7 +187,23 @@ def update_prices_inline(db: Session = Depends(database.get_db)):
                 "name": db_set.name,
             }
 
-            data = _scrape_set_inline(db_set.product_id)
+            data = None
+
+            if playwright_available and page:
+                try:
+                    set_num = db_set.product_id if "-" in db_set.product_id else f"{db_set.product_id}-1"
+                    url = f"https://www.brickeconomy.com/set/{set_num}/"
+                    resp = await page.goto(url, wait_until="domcontentloaded", timeout=20000)
+                    if resp and resp.status == 200:
+                        html = await page.content()
+                        data = extract_brickeconomy_data(html)
+                except Exception as e:
+                    print(f"[Playwright] Error scraping {db_set.product_id}: {e}")
+                    data = None
+
+            # Fallback a HTTP si Playwright fallo o no estaba disponible
+            if not data:
+                data = _scrape_set_http_fallback(db_set.product_id)
 
             if data:
                 new_price = data.get("current_price")
@@ -209,11 +248,15 @@ def update_prices_inline(db: Session = Depends(database.get_db)):
 
             yield f"data: {json.dumps(progress)}\n\n"
 
-            # Small delay to avoid rate limiting
             if idx < total - 1:
-                time.sleep(1.5)
+                await asyncio.sleep(1.5)
 
-        # Final summary event
+        if browser:
+            try:
+                await browser.close()
+            except Exception:
+                pass
+
         summary = {
             "type": "done",
             "updated": updated_count,
@@ -245,7 +288,6 @@ def reset_price_history(db: Session = Depends(database.get_db)):
     try:
         deleted = db.query(models.PriceHistory).delete()
         
-        # Resetear precios de todos los sets a NULL
         all_sets = db.query(models.LegoSet).all()
         for s in all_sets:
             s.current_price = None
