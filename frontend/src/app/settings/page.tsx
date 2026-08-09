@@ -65,6 +65,7 @@ export default function SettingsPage() {
       const { resetPriceHistory } = await import('@/lib/api');
       const res = await resetPriceHistory();
       alert(res.message || "Historial de precios reseteado correctamente.");
+      window.location.reload();
     } catch (error) {
       console.error(error);
       alert("Error al resetear el historial de precios.");

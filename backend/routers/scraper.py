@@ -123,8 +123,12 @@ def get_scraper_status(db: Session = Depends(database.get_db)):
 def reset_price_history(db: Session = Depends(database.get_db)):
     try:
         deleted = db.query(models.PriceHistory).delete()
+        db.query(models.LegoSet).update({
+            models.LegoSet.current_price: None,
+            models.LegoSet.current_used_price: None
+        })
         db.commit()
-        return {"message": f"Historial de precios reseteado. {deleted} registros eliminados."}
+        return {"message": f"Historial de precios reseteado. {deleted} registros eliminados y valores de mercado restablecidos."}
     except Exception as e:
         db.rollback()
         raise HTTPException(status_code=500, detail=str(e))

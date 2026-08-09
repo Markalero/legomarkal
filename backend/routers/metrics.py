@@ -20,9 +20,9 @@ def get_dashboard_metrics(db: Session = Depends(database.get_db)):
     sets_in_stock = 0
     for s in in_stock_sets:
         if s.condition != models.SetCondition.MISB:
-            price = s.current_used_price or s.current_price or s.msrp or s.buy_price
+            price = s.current_used_price or s.current_price or s.buy_price
         else:
-            price = s.current_price or s.msrp or s.buy_price
+            price = s.current_price or s.buy_price
         current_value += price * s.quantity
         sets_in_stock += s.quantity
         
@@ -160,10 +160,14 @@ def get_top_performers(db: Session = Depends(database.get_db)):
     performers = []
     for s in in_stock_sets:
         if s.condition != models.SetCondition.MISB:
-            price = s.current_used_price or s.current_price or s.msrp or s.buy_price
+            market_price = s.current_used_price or s.current_price
         else:
-            price = s.current_price or s.msrp or s.buy_price
+            market_price = s.current_price
             
+        if market_price is None:
+            continue
+            
+        price = market_price
         if s.buy_price > 0:
             roi = ((price - s.buy_price) / s.buy_price) * 100
             performers.append({
@@ -175,6 +179,7 @@ def get_top_performers(db: Session = Depends(database.get_db)):
                 "current_price": price,
                 "roi_percentage": round(roi, 2)
             })
+            
             
     # Sort by roi_percentage descending
     performers.sort(key=lambda x: x["roi_percentage"], reverse=True)
