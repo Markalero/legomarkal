@@ -1,6 +1,5 @@
 from abc import ABC, abstractmethod
 from typing import Dict, Any, Optional
-from playwright.async_api import Page
 
 class LegoScraperStrategy(ABC):
     """
@@ -9,13 +8,13 @@ class LegoScraperStrategy(ABC):
     """
     
     @abstractmethod
-    async def scrape(self, product_id: str, page: Page) -> Optional[Dict[str, Any]]:
+    async def scrape(self, product_id: str, session: Any = None) -> Optional[Dict[str, Any]]:
         """
         Scrapes data for a given Lego product ID.
         
         Args:
             product_id (str): The ID of the Lego set (e.g., '75192' or '75192-1').
-            page (Page): An active Playwright Page instance to perform the scraping.
+            session (Any): HTTP Session or context.
             
         Returns:
             Optional[Dict[str, Any]]: A dictionary containing scraped data, must include 
